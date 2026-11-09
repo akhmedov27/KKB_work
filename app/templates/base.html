@@ -1,3 +1,43 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ title }} · QMS Assistant KKB</title><link rel="stylesheet" href="/static/style.css"><script src="/static/htmx.min.js" defer></script><script src="/static/app.js" defer></script></head>
-<body><aside><a class="brand" href="/"><span class="logo">Q</span><span>QMS Assistant<small>ККБ · Система качества</small></span></a><div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div><nav><a href="/" class="{{ 'active' if active == 'home' }}">⌂ <span>Главная</span></a>{% for key, label in modules.items() %}<a href="/modules/{{ key }}" class="{{ 'active' if active == key }}"><span class="nav-icon">{{ ['▤','▧','◇','△','☑','▥','⚙'][loop.index0] }}</span><span>{{ label }}</span></a>{% endfor %}</nav><div class="sidebar-bottom"><span class="dot"></span> Локальное хранение<small>QMS-001 · Тестовый режим</small><button id="theme" type="button">Сменить тему</button></div></aside><main><header><span>Рабочее пространство / {{ title }}</span><span class="badge">Без внешних подключений</span></header><div class="content">{% block content %}{% endblock %}</div><footer>QMS Assistant KKB · Только синтетические данные. Не загружайте сведения о пациентах.</footer></main></body></html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · QMS Assistant KKB</title>
+  <script src="/static/theme.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Перейти к содержимому</a>
+<aside>
+  <a class="brand" href="/">
+    <span class="logo" aria-hidden="true">Q</span>
+    <span>QMS Assistant<small>ККБ · Система качества</small></span>
+  </a>
+  <button id="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar-nav">Открыть меню</button>
+  <div id="sidebar-nav">
+    <div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <nav aria-label="Основная навигация">
+      <a href="/" {% if active == 'home' %}class="active" aria-current="page"{% endif %}><span aria-hidden="true">⌂</span> Главная</a>
+      {% for key, label in modules.items() %}
+      <a href="/modules/{{ key }}" {% if active == key %}class="active" aria-current="page"{% endif %}>
+        <span class="nav-icon" aria-hidden="true">{{ ['▤','▧','◇','△','☑','▥','⚙'][loop.index0] }}</span>{{ label }}
+      </a>
+      {% endfor %}
+    </nav>
+  </div>
+  <div class="sidebar-bottom"><span class="dot"></span> Локальное хранение<small>QMS-002 · Тестовый режим</small></div>
+  <button id="theme" type="button" aria-pressed="false">Тёмная тема</button>
+</aside>
+<main id="main-content" tabindex="-1">
+  <header>
+    <div class="breadcrumbs" aria-label="Вы находитесь здесь"><a href="/">Рабочее пространство</a><span aria-hidden="true"> / </span><span>{{ title }}</span></div>
+    <span class="badge">Без внешних подключений</span>
+  </header>
+  <div class="content">{% block content %}{% endblock %}</div>
+  <footer>QMS Assistant KKB · Только синтетические данные. Не загружайте сведения о пациентах.</footer>
+</main>
+</body>
+</html>

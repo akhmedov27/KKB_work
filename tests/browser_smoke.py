@@ -1,0 +1,67 @@
+"""Optional UI smoke checks; run against a server with disposable synthetic data."""
+import os
+from playwright.sync_api import sync_playwright, expect
+
+url = os.environ.get('QMS_TEST_URL', 'http://127.0.0.1:8002')
+with sync_playwright() as p:
+    options = {'headless': True}
+    if os.environ.get('QMS_CHROMIUM_PATH'):
+        options['executable_path'] = os.environ['QMS_CHROMIUM_PATH']
+    browser = p.chromium.launch(**options)
+    page = browser.new_page(viewport={'width': 1366, 'height': 900})
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.goto(url)
+    for route in ['knowledge', 'documents', 'incidents', 'risks', 'audits', 'reports', 'settings']:
+        page.locator(f'nav a[href="/modules/{route}"]').click()
+        expect(page.locator('nav [aria-current="page"]')).to_have_attribute('href', f'/modules/{route}')
+    page.locator('#theme').click()
+    page.reload()
+    expect(page.locator('html')).to_have_attribute('data-theme', 'dark')
+    expect(page.locator('#theme')).to_have_attribute('aria-pressed', 'true')
+    page.locator('nav a[href="/"]').click()
+    page.locator('#message').fill('Синтетическая проверка QMS-002')
+    page.get_by_role('button', name='Отправить').click()
+    expect(page.locator('.message.assistant').last).to_contain_text('MockProvider')
+    expect(page.locator('#message')).to_be_focused()
+    page.route('**/chat', lambda route: route.fulfill(status=503, content_type='application/json', body='{"detail":"Тестовая ошибка"}'))
+    page.locator('#message').fill('Повторный запрос')
+    page.get_by_role('button', name='Отправить').click()
+    expect(page.locator('#chat-error')).to_have_text('Тестовая ошибка')
+    expect(page.locator('#message')).to_have_value('Повторный запрос')
+    expect(page.get_by_role('button', name='Отправить')).to_be_enabled()
+    page.unroute('**/chat')
+    page.locator('nav a[href="/modules/knowledge"]').click()
+    page.locator('#file').set_input_files({'name': 'bad.txt', 'mimeType': 'text/plain', 'buffer': b'synthetic'})
+    page.get_by_role('button', name='Загрузить локально').click()
+    expect(page.locator('#upload-result')).to_contain_text('Выберите непустой')
+    page.locator('#file').set_input_files({'name': 'test-qms002.pdf', 'mimeType': 'application/pdf', 'buffer': b'synthetic'})
+    page.get_by_role('button', name='Загрузить локально').click()
+    page.get_by_role('link', name='Обновить список').click()
+    expect(page.locator('tbody')).to_contain_text('test-qms002.pdf')
+    page.set_viewport_size({'width': 390, 'height': 844})
+    expect(page.locator('#sidebar-nav')).to_be_hidden()
+    page.locator('#menu-toggle').click()
+    expect(page.locator('#sidebar-nav')).to_be_visible()
+    page.keyboard.press('Escape')
+    expect(page.locator('#sidebar-nav')).to_be_hidden()
+    expect(page.locator('#menu-toggle')).to_be_focused()
+    expect(page.locator('#theme')).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.locator('#menu-toggle').click()
+    page.locator('nav a[href="/modules/settings"]').click()
+    expect(page.locator('#sidebar-nav')).to_be_hidden()
+    page.goto(url + '/missing')
+    page.get_by_role('link', name='Вернуться на главную').click()
+    expect(page.locator('h1')).to_contain_text('Порядок в процессах')
+    assert not errors, errors
+    browser.close()
+    # A restrictive browser profile must not disable the rest of the UI.
+    browser = p.chromium.launch(**options)
+    page = browser.new_page()
+    page.add_init_script("Object.defineProperty(window, 'localStorage', {get() {throw new Error('blocked')}})")
+    page.goto(url)
+    page.locator('#theme').click()
+    expect(page.locator('html')).to_have_attribute('data-theme', 'dark')
+    browser.close()
+print('UI checks passed: navigation, theme, chat/error, uploads, mobile menu, 404, restricted storage')

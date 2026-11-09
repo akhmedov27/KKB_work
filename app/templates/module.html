@@ -1,1 +1,42 @@
-{% extends 'base.html' %}{% block content %}<div class="eyebrow">МОДУЛИ СИСТЕМЫ КАЧЕСТВА</div><h1>{{ title }}</h1><p class="subtitle">Каркас модуля · QMS-001</p><section class="panel"><span class="badge">В разработке</span><h2>Раздел подготовлен к следующему этапу</h2><p>Функции модуля пока не реализованы. Здесь не отображаются вымышленные результаты.</p>{% if active == 'settings' %}<h3>Текущая конфигурация</h3><p>Провайдер: {{ settings.ai_provider }}. Работает только mock; local и cloud возвращают сообщение о недоступности.</p><p>Настройки задаются через .env. Облачная передача не реализована и отключена.</p>{% endif %}</section>{% if active == 'knowledge' %}<section class="panel upload"><h2>Локальная загрузка файлов</h2><p>Только DOCX, XLSX, PDF, до {{ settings.max_upload_mb }} МБ. Проверяются расширение и размер; содержимое не анализируется и не выполняется.</p><form id="upload-form"><label for="file">Тестовый документ</label><input type="file" id="file" name="file" accept=".docx,.xlsx,.pdf" required><button type="submit">Загрузить локально</button></form><p id="upload-result" role="status"></p><h3>Загруженные документы</h3>{% for doc in documents %}<div class="document">{{ doc.original_name }}<small>{{ doc.size }} байт · {{ doc.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</small></div>{% else %}<p>Документов пока нет.</p>{% endfor %}</section>{% endif %}{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="eyebrow">МОДУЛИ СИСТЕМЫ КАЧЕСТВА</div>
+<h1>{{ title }}</h1>
+<p class="subtitle">{{ description }}</p>
+<section class="panel module-intro">
+  <span class="badge">{{ 'Базовая загрузка доступна' if active == 'knowledge' else 'Просмотр конфигурации' if active == 'settings' else 'В разработке' }}</span>
+  <h2>{{ 'Приём тестовых документов' if active == 'knowledge' else 'Параметры рабочего пространства' if active == 'settings' else 'Раздел подготовлен к следующему этапу' }}</h2>
+  <p>{{ limitation }}</p>
+  {% if active == 'settings' %}
+  <dl class="settings-list">
+    <div><dt>ИИ-провайдер</dt><dd>{{ settings.ai_provider }}</dd></div>
+    <div><dt>Облачная передача</dt><dd>Отключена</dd></div>
+    <div><dt>Лимит файла</dt><dd>{{ settings.max_upload_mb }} МиБ</dd></div>
+    <div><dt>Хранение</dt><dd>На этом компьютере</dd></div>
+  </dl>
+  <p class="muted">Параметры задаются в .env перед запуском. Для смены оформления используйте кнопку темы в меню.</p>
+  {% endif %}
+  <a class="back-link" href="/">← На главную</a>
+</section>
+{% if active == 'knowledge' %}
+<section class="panel upload">
+  <h2>Локальная загрузка файлов</h2>
+  <p id="upload-help">DOCX, XLSX, PDF — до {{ settings.max_upload_mb }} МиБ. Только тестовые документы без сведений о пациентах.</p>
+  <form id="upload-form" data-max-bytes="{{ settings.max_upload_mb * 1024 * 1024 }}" aria-busy="false">
+    <label for="file">Выберите документ</label>
+    <input type="file" id="file" name="file" accept=".docx,.xlsx,.pdf" aria-describedby="upload-help" required>
+    <button type="submit">Загрузить локально</button>
+  </form>
+  <p id="upload-result" role="status" aria-live="polite"></p>
+  <h3>Загруженные документы</h3>
+  {% if documents %}
+  <div class="table-scroll" role="region" aria-label="Загруженные документы" tabindex="0">
+    <table><caption>Последние 100 файлов. Содержимое не анализировалось.</caption>
+      <thead><tr><th scope="col">Название</th><th scope="col">Размер</th><th scope="col">Загружен (UTC)</th><th scope="col">Статус</th></tr></thead>
+      <tbody>{% for doc in documents %}<tr><td>{{ doc.original_name }}</td><td>{{ '%.1f'|format(doc.size / 1024) }} КиБ</td><td>{{ doc.created_at.strftime('%d.%m.%Y %H:%M') }}</td><td>Сохранён локально</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty-state"><h3>Документов пока нет</h3><p>Выберите тестовый файл выше. После загрузки обновите список по появившейся ссылке.</p></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

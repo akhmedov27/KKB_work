@@ -99,3 +99,26 @@ def test_error_logging(setup, monkeypatch):
     log = (path / 'logs' / 'app.log').read_text(encoding='utf-8')
     assert 'OSError' in log
     assert 'sensitive-test-text' not in log
+
+
+def test_navigation_and_html_not_found(setup):
+    client, _ = setup
+    for module in ['knowledge', 'documents', 'incidents', 'risks', 'audits', 'reports', 'settings']:
+        html = client.get('/modules/' + module).text
+        assert html.count('aria-current="page"') == 1
+        assert f'href="/modules/{module}" class="active" aria-current="page"' in html
+        assert 'aria-controls="sidebar-nav"' in html
+    response = client.get('/missing', headers={'accept': 'text/html'})
+    assert response.status_code == 404
+    assert 'Вернуться на главную' in response.text
+    assert client.get('/missing').headers['content-type'].startswith('application/json')
+
+
+def test_settings_show_configured_limit_and_provider(tmp_path):
+    with TestClient(create_app(Settings(data_dir=tmp_path, max_upload_mb=3, ai_provider='local', _env_file=None))) as client:
+        settings = client.get('/modules/settings').text
+        assert '<dd>local</dd>' in settings
+        assert '<dd>3 МиБ</dd>' in settings
+        knowledge = client.get('/modules/knowledge').text
+        assert 'data-max-bytes="3145728"' in knowledge
+        assert 'Документов пока нет' in knowledge

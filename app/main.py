@@ -21,6 +21,17 @@ ROOT = Path(__file__).parent
 MODULES = {"knowledge": "База знаний", "documents": "Документы", "incidents": "Инциденты", "risks": "Риски", "audits": "Внутренние аудиты", "reports": "Отчётность", "settings": "Настройки"}
 
 
+MODULE_INFO = {
+    "knowledge": ("Локальное хранилище документов СМК.", "Доступна загрузка. Извлечение текста, классификация и поиск пока не реализованы."),
+    "documents": ("Рабочее пространство для документов СМК.", "Анализ структуры, сравнение версий и создание Word и Excel пока не реализованы."),
+    "incidents": ("Данные об инцидентах и их анализ.", "Импорт Excel, расчёт показателей и анализ динамики пока не реализованы."),
+    "risks": ("Оценка и управление рисками процессов.", "Реестр рисков, расчёт ранга и контроль мероприятий пока не реализованы."),
+    "audits": ("Планирование и сопровождение внутренних аудитов.", "Программы, чек-листы, несоответствия и отчёты пока не реализованы."),
+    "reports": ("Отчётность системы менеджмента качества.", "Сводные таблицы, диаграммы и экспорт отчётов пока не реализованы."),
+    "settings": ("Текущие параметры приложения и оформление.", "Работает только MockProvider. Локальный и облачный ИИ не подключены."),
+}
+
+
 def create_app(settings: Settings | None = None):
     settings = settings or Settings()
     data = settings.data_dir.resolve()
@@ -53,6 +64,10 @@ def create_app(settings: Settings | None = None):
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request, exc):
         logger.warning("Ошибка HTTP %s; путь=%s", exc.status_code, request.url.path)
+        if exc.status_code == 404 and "text/html" in request.headers.get("accept", ""):
+            response = render(request, "error.html", active="", title="Страница не найдена", status_code=404, detail="Проверьте адрес или выберите раздел в меню.")
+            response.status_code = 404
+            return response
         return JSONResponse({"detail": exc.detail if isinstance(exc.detail, str) and exc.status_code != 404 else "Страница не найдена."}, status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
@@ -84,7 +99,7 @@ def create_app(settings: Settings | None = None):
             raise HTTPException(404)
         with sessions() as db:
             documents = db.scalars(select(Document).order_by(Document.id.desc()).limit(100)).all()
-        return render(request, "module.html", active=module, title=MODULES[module], documents=documents)
+        return render(request, "module.html", active=module, title=MODULES[module], documents=documents, description=MODULE_INFO[module][0], limitation=MODULE_INFO[module][1])
 
     @app.post("/chat", response_class=HTMLResponse)
     def chat(request: Request, message: str = Form(..., min_length=1, max_length=4000)):
