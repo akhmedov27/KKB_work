@@ -25,9 +25,9 @@ def message_page(db: Session, conversation_id: int, before_id: int | None):
     return list(reversed(rows[:MESSAGE_PAGE_SIZE])), len(rows) > MESSAGE_PAGE_SIZE
 
 
-def save_exchange(db: Session, conversation: Conversation, message: str, answer: str):
-    rows = [ChatMessage(conversation_id=conversation.id, role='user', content=message),
-            ChatMessage(conversation_id=conversation.id, role='assistant', content=answer)]
+def save_exchange(db: Session, conversation: Conversation, message: str, answer: str, provider="mock", model=""):
+    rows = [ChatMessage(conversation_id=conversation.id, role='user', content=message, provider=provider, model=model),
+            ChatMessage(conversation_id=conversation.id, role='assistant', content=answer, provider=provider, model=model)]
     conversation.updated_at = now()
     db.add_all(rows)
     db.flush()

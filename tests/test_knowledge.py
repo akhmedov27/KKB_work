@@ -204,7 +204,7 @@ def test_v2_upgrade_preserves_text_history_and_originals(local):
         assert 'Не указан' in html
         assert client.post(f'/documents/{document_id}/metadata', data={'title': 'Реквизиты после обновления'}).status_code == 200
     assert (path / 'uploads' / 'fixture.pdf').read_bytes() == b'preserved original'
-    backups = list((path / 'backups').glob('qms-before-v3-*.sqlite3'))
+    backups = list((path / 'backups').glob(f'qms-before-v{SCHEMA_VERSION}-*.sqlite3'))
     assert len(backups) == 1
     with closing(sqlite3.connect(backups[0])) as backup:
         assert backup.execute('PRAGMA user_version').fetchone()[0] == 2

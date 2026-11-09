@@ -20,25 +20,26 @@ from app.config import Settings
 from app.models import ChatMessage, Conversation, Document, DocumentExtraction, DocumentMetadata, now
 from app.database import SCHEMA_VERSION, build_engine, initialize_database
 from app.history import latest_conversation, list_conversations, message_page, save_exchange
-from app.providers import ProviderUnavailable, get_provider
+from app.providers import ProviderUnavailable
 from app.storage import save_upload
 from app.documents import process_document
 from app.extraction import ProcessingBusy, STATUS_LABELS
 from app.knowledge import MetadataInput, search_documents, PAGE_SIZE, STATUS_LABELS as DOCUMENT_STATUSES, CATEGORY_LABELS
 from app.search import text_parts
+from app.ai_service import AIService
 
 ROOT = Path(__file__).parent
 MODULES = {"knowledge": "База знаний", "documents": "Документы", "incidents": "Инциденты", "risks": "Риски", "audits": "Внутренние аудиты", "reports": "Отчётность", "settings": "Настройки"}
 
 
 MODULE_INFO = {
-    "knowledge": ("Локальное хранилище документов СМК.", "Доступны поиск, ручная классификация и реквизиты документов. Смысловой поиск и ответы ИИ пока не подключены."),
+    "knowledge": ("Локальное хранилище документов СМК.", "Доступны поиск, ручная классификация и реквизиты документов. Смысловой поиск и автоматические ответы ИИ по базе пока не подключены."),
     "documents": ("Рабочее пространство для документов СМК.", "Анализ структуры, сравнение версий и создание Word и Excel пока не реализованы."),
     "incidents": ("Данные об инцидентах и их анализ.", "Импорт Excel, расчёт показателей и анализ динамики пока не реализованы."),
     "risks": ("Оценка и управление рисками процессов.", "Реестр рисков, расчёт ранга и контроль мероприятий пока не реализованы."),
     "audits": ("Планирование и сопровождение внутренних аудитов.", "Программы, чек-листы, несоответствия и отчёты пока не реализованы."),
     "reports": ("Отчётность системы менеджмента качества.", "Сводные таблицы, диаграммы и экспорт отчётов пока не реализованы."),
-    "settings": ("Текущие параметры приложения и оформление.", "Работает только MockProvider. Локальный и облачный ИИ не подключены."),
+    "settings": ("Текущие параметры приложения и оформление.", "ИИ подключается по конфигурации. DeepSeek требует ключа, включения облачного режима и разрешения на каждый запрос."),
 }
 
 
@@ -70,11 +71,12 @@ def create_app(settings: Settings | None = None):
 
     app = FastAPI(title="QMS Assistant KKB", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
+    ai_service = AIService(settings)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
     templates = Jinja2Templates(directory=ROOT / "templates")
 
     def render(request, template, **context):
-        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, "document_statuses": DOCUMENT_STATUSES, "categories": CATEGORY_LABELS, **context})
+        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, "document_statuses": DOCUMENT_STATUSES, "categories": CATEGORY_LABELS, "ai_status": ai_service.status(), "ai_key_present": bool(settings.cloud_api_key.get_secret_value().strip()), **context})
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request, exc):
@@ -152,21 +154,30 @@ def create_app(settings: Settings | None = None):
 
     @app.post("/chat", response_class=HTMLResponse)
     def chat(request: Request, message: str = Form(..., min_length=1, max_length=4000),
-             conversation_id: int | None = Form(None, ge=1)):
+             conversation_id: int | None = Form(None, ge=1),
+             fragment: str = Form("", max_length=6000), cloud_consent: bool = Form(False)):
+        origin = request.headers.get('origin')
+        if settings.ai_provider == 'cloud' and origin and origin.rstrip('/') != str(request.base_url).rstrip('/'):
+            raise HTTPException(403, "Отправка в облако с другой страницы запрещена.")
         message = message.strip()
         if not message:
             raise HTTPException(400, "Введите текст запроса.")
-        with sessions.begin() as db:
+        with sessions() as db:
             conversation = db.get(Conversation, conversation_id) if conversation_id else latest_conversation(db)
             if conversation is None:
                 raise HTTPException(404, "Диалог не найден.")
-            try:
-                answer = get_provider(settings.ai_provider).reply(message)
-            except ProviderUnavailable as exc:
-                raise HTTPException(503, str(exc)) from exc
-            messages = save_exchange(db, conversation, message, answer)
-            response = render(request, "messages.html", messages=messages)
             selected_id = conversation.id
+        try:
+            reply = ai_service.reply(message, fragment, cloud_consent)
+        except ProviderUnavailable as exc:
+            logger.warning("Запрос ИИ не выполнен; провайдер=%s; код=%d", settings.ai_provider, exc.status_code)
+            raise HTTPException(exc.status_code, str(exc)) from exc
+        # Network calls never hold a write transaction open. Persist only the
+        # successfully received exchange; provider errors leave history intact.
+        with sessions.begin() as db:
+            conversation = db.get(Conversation, selected_id)
+            messages = save_exchange(db, conversation, reply.user_text, reply.text, reply.provider, reply.model)
+            response = render(request, "messages.html", messages=messages)
         response.headers["HX-Push-Url"] = f"/?conversation_id={selected_id}"
         logger.info("Сообщения чата сохранены; диалог=%d", selected_id)
         return response

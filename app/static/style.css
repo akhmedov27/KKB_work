@@ -73,3 +73,7 @@ input[type=file] { max-width: 100%; color: var(--text); }
 .extracted-text span[id]:target { background: var(--soft); outline: 2px solid var(--accent); }
 @media(max-width: 900px) { .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media(max-width: 500px) { .metadata-grid { grid-template-columns: 1fr; } .search-line { flex-wrap: wrap; } }
+.manual-context { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.manual-context summary { cursor: pointer; color: var(--accent); }
+.cloud-consent { display: flex; gap: 10px; align-items: flex-start; padding: 14px; margin: 14px 0; background: var(--soft); border-radius: 8px; font-weight: 400; }
+.cloud-consent input { margin-top: 4px; flex-shrink: 0; }

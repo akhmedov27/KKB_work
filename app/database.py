@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from app.models import Base
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def build_engine(path: Path) -> Engine:
@@ -49,6 +49,8 @@ def initialize_database(engine: Engine, path: Path):
                 raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
             if version == 2 and not {'chat_messages', 'conversations', 'documents', 'document_extractions'}.issubset(tables):
                 raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
+            if version == 3 and not {'chat_messages', 'conversations', 'documents', 'document_extractions', 'document_metadata'}.issubset(tables):
+                raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
             if tables:
                 backup_dir = path.parent / 'backups'
                 backup_dir.mkdir(exist_ok=True)
@@ -60,6 +62,12 @@ def initialize_database(engine: Engine, path: Path):
                     source.backup(destination)
                     if destination.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                         raise RuntimeError('Проверка резервной копии не пройдена.')
+            if 'chat_messages' in tables and not legacy:
+                columns = {row[1] for row in connection.exec_driver_sql('PRAGMA table_info(chat_messages)')}
+                if 'provider' not in columns:
+                    connection.exec_driver_sql("ALTER TABLE chat_messages ADD COLUMN provider VARCHAR(20) NOT NULL DEFAULT 'mock'")
+                if 'model' not in columns:
+                    connection.exec_driver_sql("ALTER TABLE chat_messages ADD COLUMN model VARCHAR(100) NOT NULL DEFAULT ''")
             if 'document_extractions' in tables:
                 columns = {row[1] for row in connection.exec_driver_sql('PRAGMA table_info(document_extractions)')}
                 if 'source_map_json' not in columns:

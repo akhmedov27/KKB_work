@@ -35,9 +35,12 @@ const messages = document.querySelector('#messages');
 if (messages) messages.scrollTop = messages.scrollHeight;
 function chatBusy(busy) {
   chat.setAttribute('aria-busy', String(busy));
+  for (const field of chat.querySelectorAll('textarea')) field.readOnly = busy;
+  const consent = chat.querySelector('[name=cloud_consent]');
+  if (consent) consent.disabled = busy;
   chat.querySelector('button').disabled = busy;
   chat.querySelector('button').textContent = busy ? 'Отправка…' : 'Отправить ↑';
-  document.querySelector('#chat-status').textContent = busy ? 'Ожидаем тестовый ответ…' : '';
+  document.querySelector('#chat-status').textContent = busy ? 'Ожидаем ответ выбранного провайдера…' : '';
 }
 document.body.addEventListener('htmx:beforeRequest', e => {
   if (e.detail.elt.id === 'chat-form') {
@@ -48,6 +51,8 @@ document.body.addEventListener('htmx:beforeRequest', e => {
 document.body.addEventListener('htmx:afterRequest', e => {
   if (e.detail.elt.id !== 'chat-form') return;
   chatBusy(false);
+  const consent = chat.querySelector('[name=cloud_consent]');
+  if (consent) consent.checked = false;
   const error = document.querySelector('#chat-error');
   if (e.detail.successful) {
     document.querySelector('.empty')?.remove();
@@ -56,7 +61,7 @@ document.body.addEventListener('htmx:afterRequest', e => {
     document.querySelector('#message').focus();
   } else {
     try { error.textContent = JSON.parse(e.detail.xhr.responseText).detail; }
-    catch { error.textContent = 'Не удалось отправить запрос. Проверьте соединение с приложением и повторите попытку.'; }
+    catch { error.textContent = 'Не удалось подтвердить результат. Обновите историю перед повторной отправкой: предыдущий запрос мог быть выполнен.'; }
   }
 });
 const upload = document.querySelector('#upload-form');

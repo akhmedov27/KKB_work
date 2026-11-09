@@ -23,6 +23,8 @@ class Conversation(Base):
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20), default="mock", server_default="mock")
+    model: Mapped[str] = mapped_column(String(100), default="", server_default="")
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="RESTRICT"))
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
