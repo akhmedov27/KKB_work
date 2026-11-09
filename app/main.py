@@ -27,6 +27,7 @@ from app.extraction import ProcessingBusy, STATUS_LABELS
 from app.knowledge import MetadataInput, search_documents, PAGE_SIZE, STATUS_LABELS as DOCUMENT_STATUSES, CATEGORY_LABELS
 from app.search import text_parts
 from app.ai_service import AIService
+from app.incident_routes import make_router as incident_router
 
 ROOT = Path(__file__).parent
 MODULES = {"knowledge": "База знаний", "documents": "Документы", "incidents": "Инциденты", "risks": "Риски", "audits": "Внутренние аудиты", "reports": "Отчётность", "settings": "Настройки"}
@@ -144,6 +145,8 @@ def create_app(settings: Settings | None = None):
                       q=q, status=status, category=category, department=department, total=total, page=page,
                       previous_url=page_url(page - 1) if page > 1 else None,
                       next_url=page_url(page + 1) if page * PAGE_SIZE < total else None)
+
+    app.include_router(incident_router(sessions, settings, render, logger))
 
     @app.get("/modules/{module}", response_class=HTMLResponse)
     def module_page(request: Request, module: str):

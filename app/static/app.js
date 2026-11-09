@@ -137,3 +137,30 @@ if (metadataForm) metadataForm.addEventListener('submit', async e => {
   } catch { result.textContent = 'Не удалось подтвердить сохранение. Проверьте соединение и повторите попытку.'; }
   finally { button.disabled = false; metadataForm.setAttribute('aria-busy', 'false'); }
 });
+
+for (const form of document.querySelectorAll('.incident-form')) {
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const button = form.querySelector('button[type=submit]'), result = form.querySelector('.incident-result');
+    button.disabled = true; form.setAttribute('aria-busy', 'true'); result.classList.remove('error');
+    result.textContent = 'Проверяем и сохраняем данные локально…';
+    try {
+      const response = await fetch(form.action, {method: 'POST', body: new FormData(form), signal: AbortSignal.timeout(90000)});
+      if (response.ok && response.redirected) { location.href = response.url; return; }
+      const data = await response.json(); result.textContent = data.detail || 'Не удалось завершить операцию.'; result.classList.add('error');
+    } catch { result.textContent = 'Не удалось подтвердить результат. Обновите страницу проверки перед повторной отправкой.'; result.classList.add('error'); }
+    finally { button.disabled = false; form.setAttribute('aria-busy', 'false'); }
+  });
+}
+const incidentFilters = document.querySelector('#incident-filters');
+if (incidentFilters) incidentFilters.addEventListener('submit', e => {
+  for (const [startName, endName] of [['date_from','date_to'], ['compare_from','compare_to']]) {
+    const start = incidentFilters.elements[startName], end = incidentFilters.elements[endName];
+    end.setCustomValidity('');
+    if ((start.value && end.value && start.value > end.value) || (startName === 'compare_from' && Boolean(start.value) !== Boolean(end.value))) {
+      e.preventDefault(); end.setCustomValidity('Укажите обе даты сравнения; начало периода не должно быть позже окончания.'); end.reportValidity();
+    }
+    end.addEventListener('input', () => end.setCustomValidity(''), {once: true});
+    start.addEventListener('input', () => end.setCustomValidity(''), {once: true});
+  }
+});

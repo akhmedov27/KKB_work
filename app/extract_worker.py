@@ -1,5 +1,6 @@
 """One-shot text extraction. Never launches document applications or macros."""
 import sys
+import re
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -47,7 +48,7 @@ class TextBuffer:
         return ExtractionResult(status='ready', text='\n'.join(self.parts), sources=self.sources, notice='Текст извлечён локально. Проверьте полноту и порядок по оригиналу.')
 
 
-def check_office_package(path, suffix):
+def check_office_package(path, suffix, allow_print_settings=False):
     """Inspect in memory; never extract ZIP entries onto the filesystem."""
     from defusedxml import ElementTree
     try:
@@ -62,7 +63,9 @@ def check_office_package(path, suffix):
             for item in entries:
                 if item.flag_bits & 1:
                     raise InvalidDocument('Документы Office с паролем не поддерживаются.')
-                if 'vbaproject' in item.filename.lower() or item.filename.lower().endswith('.bin'):
+                is_print_settings = (allow_print_settings and suffix == '.xlsx' and
+                                     re.fullmatch(r'xl/printerSettings/printerSettings[0-9]+\.bin', item.filename, flags=re.IGNORECASE))
+                if 'vbaproject' in item.filename.lower() or (item.filename.lower().endswith('.bin') and not is_print_settings):
                     raise InvalidDocument('Документы со встроенными двоичными объектами или макросами не поддерживаются.')
                 if item.file_size > 1024 * 1024 and item.file_size > max(item.compress_size, 1) * 200:
                     raise InvalidDocument('Слишком высокая степень сжатия Office-архива. Обработка остановлена.')
