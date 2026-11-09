@@ -14,10 +14,17 @@ _GATE = threading.BoundedSemaphore(1)
 STATUS_LABELS = {'ready': 'Текст извлечён', 'empty': 'Нет доступного текста', 'error': 'Ошибка обработки'}
 
 
+class SourceSpan(BaseModel):
+    start: int = Field(ge=0, le=MAX_TEXT_CHARS)
+    end: int = Field(ge=0, le=MAX_TEXT_CHARS)
+    label: str = Field(max_length=200)
+
+
 class ExtractionResult(BaseModel):
     status: Literal['ready', 'empty', 'error']
     text: str = Field(default='', max_length=MAX_TEXT_CHARS)
     notice: str = Field(default='', max_length=500)
+    sources: list[SourceSpan] = Field(default_factory=list, max_length=200)
 
 
 class ProcessingBusy(Exception):

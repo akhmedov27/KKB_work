@@ -18,25 +18,4 @@
   {% endif %}
   <a class="back-link" href="/">← На главную</a>
 </section>
-{% if active == 'knowledge' %}
-<section class="panel upload">
-  <h2>Локальная загрузка файлов</h2>
-  <p id="upload-help">DOCX, XLSX, PDF — до {{ settings.max_upload_mb }} МиБ. После загрузки текст извлекается локально. Только тестовые документы без сведений о пациентах.</p>
-  <form id="upload-form" data-max-bytes="{{ settings.max_upload_mb * 1024 * 1024 }}" aria-busy="false">
-    <label for="file">Выберите документ</label>
-    <input type="file" id="file" name="file" accept=".docx,.xlsx,.pdf" aria-describedby="upload-help" required>
-    <button type="submit">Загрузить локально</button>
-  </form>
-  <p id="upload-result" role="status" aria-live="polite"></p>
-  <h3>Загруженные документы</h3>
-  {% if documents %}
-  <div class="table-scroll" role="region" aria-label="Загруженные документы" tabindex="0">
-    <table><caption>Последние 100 файлов. Откройте документ для просмотра извлечённого текста.</caption>
-      <thead><tr><th scope="col">Название</th><th scope="col">Размер</th><th scope="col">Загружен (UTC)</th><th scope="col">Статус</th></tr></thead>
-      <tbody>{% for doc in documents %}<tr><td><a href="/documents/{{ doc.id }}">{{ doc.original_name }}</a></td><td>{{ '%.1f'|format(doc.size / 1024) }} КиБ</td><td>{{ doc.created_at.strftime('%d.%m.%Y %H:%M') }}</td><td>{{ extraction_labels.get(extraction_statuses.get(doc.id), "Не обработан") }}</td></tr>{% endfor %}</tbody>
-    </table>
-  </div>
-  {% else %}<div class="empty-state"><h3>Документов пока нет</h3><p>Выберите тестовый файл выше. После загрузки обновите список по появившейся ссылке.</p></div>{% endif %}
-</section>
-{% endif %}
 {% endblock %}

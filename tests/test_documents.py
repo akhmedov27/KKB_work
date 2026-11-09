@@ -12,7 +12,7 @@ from openpyxl import Workbook
 import pymupdf
 
 from app.config import Settings
-from app.database import build_engine
+from app.database import SCHEMA_VERSION, build_engine
 from app.extraction import ExtractionResult, extract_local
 from app.extract_worker import extract
 from app.main import create_app
@@ -218,7 +218,7 @@ def test_upgrade_v1_preserves_documents_and_history(tmp_path):
         assert 'История v1' in client.get('/').text
         assert 'Не обработан' in client.get(doc['url']).text
         assert client.post(doc['url'] + '/extract').json()['status'] == 'ready'
-    backups = list((tmp_path / 'backups').glob('qms-before-v2-*.sqlite3'))
+    backups = list((tmp_path / 'backups').glob(f'qms-before-v{SCHEMA_VERSION}-*.sqlite3'))
     assert len(backups) == 1
     with closing(sqlite3.connect(backups[0])) as backup:
         assert backup.execute('PRAGMA user_version').fetchone()[0] == 1
@@ -274,4 +274,4 @@ def test_failed_v1_upgrade_rolls_back(tmp_path, monkeypatch):
         assert db.execute('PRAGMA user_version').fetchone()[0] == 1
         assert not db.execute("SELECT name FROM sqlite_master WHERE name='document_extractions'").fetchall()
         assert db.execute('SELECT COUNT(*) FROM chat_messages').fetchone()[0] == 2
-    assert len(list((tmp_path / 'backups').glob('qms-before-v2-*.sqlite3'))) == 1
+    assert len(list((tmp_path / 'backups').glob(f'qms-before-v{SCHEMA_VERSION}-*.sqlite3'))) == 1

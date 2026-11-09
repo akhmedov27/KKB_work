@@ -2,6 +2,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 from pathlib import Path
+from datetime import date
+from typing import Annotated, Literal
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Query
 from fastapi.exceptions import RequestValidationError
@@ -14,20 +17,22 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import Settings
-from app.models import ChatMessage, Conversation, Document, DocumentExtraction
+from app.models import ChatMessage, Conversation, Document, DocumentExtraction, DocumentMetadata, now
 from app.database import SCHEMA_VERSION, build_engine, initialize_database
 from app.history import latest_conversation, list_conversations, message_page, save_exchange
 from app.providers import ProviderUnavailable, get_provider
 from app.storage import save_upload
 from app.documents import process_document
 from app.extraction import ProcessingBusy, STATUS_LABELS
+from app.knowledge import MetadataInput, search_documents, PAGE_SIZE, STATUS_LABELS as DOCUMENT_STATUSES, CATEGORY_LABELS
+from app.search import text_parts
 
 ROOT = Path(__file__).parent
 MODULES = {"knowledge": "База знаний", "documents": "Документы", "incidents": "Инциденты", "risks": "Риски", "audits": "Внутренние аудиты", "reports": "Отчётность", "settings": "Настройки"}
 
 
 MODULE_INFO = {
-    "knowledge": ("Локальное хранилище документов СМК.", "Доступны загрузка и локальное извлечение текста. Классификация, поиск и ответы по документам пока не реализованы."),
+    "knowledge": ("Локальное хранилище документов СМК.", "Доступны поиск, ручная классификация и реквизиты документов. Смысловой поиск и ответы ИИ пока не подключены."),
     "documents": ("Рабочее пространство для документов СМК.", "Анализ структуры, сравнение версий и создание Word и Excel пока не реализованы."),
     "incidents": ("Данные об инцидентах и их анализ.", "Импорт Excel, расчёт показателей и анализ динамики пока не реализованы."),
     "risks": ("Оценка и управление рисками процессов.", "Реестр рисков, расчёт ранга и контроль мероприятий пока не реализованы."),
@@ -69,7 +74,7 @@ def create_app(settings: Settings | None = None):
     templates = Jinja2Templates(directory=ROOT / "templates")
 
     def render(request, template, **context):
-        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, **context})
+        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, "document_statuses": DOCUMENT_STATUSES, "categories": CATEGORY_LABELS, **context})
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request, exc):
@@ -123,15 +128,27 @@ def create_app(settings: Settings | None = None):
         logger.info("Создан диалог; id=%d", conversation_id)
         return RedirectResponse(f"/?conversation_id={conversation_id}", status_code=303)
 
+    @app.get("/modules/knowledge", response_class=HTMLResponse)
+    def knowledge_page(request: Request, q: str = Query("", max_length=200),
+                       status: Literal['all', 'unspecified', 'active', 'archived', 'cancelled'] = 'all',
+                       category: Literal['all', 'unspecified', 'stu', 'oar', 'policy', 'instruction', 'regulation', 'procedure', 'audit', 'report', 'other'] = 'all',
+                       department: str = Query("", max_length=150), page: int = Query(1, ge=1, le=1000000)):
+        q, department = q.strip(), department.strip()
+        with sessions() as db:
+            results, total = search_documents(db, q, status, category, department, page)
+        def page_url(number):
+            return '/modules/knowledge?' + urlencode(dict(q=q, status=status, category=category, department=department, page=number))
+        return render(request, 'knowledge.html', active='knowledge', title='База знаний', results=results,
+                      q=q, status=status, category=category, department=department, total=total, page=page,
+                      previous_url=page_url(page - 1) if page > 1 else None,
+                      next_url=page_url(page + 1) if page * PAGE_SIZE < total else None)
+
     @app.get("/modules/{module}", response_class=HTMLResponse)
     def module_page(request: Request, module: str):
         if module not in MODULES:
             raise HTTPException(404)
-        with sessions() as db:
-            rows = db.execute(select(Document, DocumentExtraction.status).outerjoin(DocumentExtraction).order_by(Document.id.desc()).limit(100)).all()
-            documents = [row[0] for row in rows]
-            extraction_statuses = {row[0].id: row[1] for row in rows}
-        return render(request, "module.html", active=module, title=MODULES[module], documents=documents, extraction_statuses=extraction_statuses, description=MODULE_INFO[module][0], limitation=MODULE_INFO[module][1])
+        return render(request, "module.html", active=module, title=MODULES[module],
+                      description=MODULE_INFO[module][0], limitation=MODULE_INFO[module][1])
 
     @app.post("/chat", response_class=HTMLResponse)
     def chat(request: Request, message: str = Form(..., min_length=1, max_length=4000),
@@ -161,7 +178,26 @@ def create_app(settings: Settings | None = None):
             if document is None:
                 raise HTTPException(404, "Документ не найден.")
             extraction = db.get(DocumentExtraction, document_id)
-        return render(request, "document.html", active="knowledge", title="Просмотр документа", document=document, extraction=extraction)
+            metadata = db.get(DocumentMetadata, document_id)
+        parts = text_parts(extraction.text, extraction.source_map_json) if extraction and extraction.status == 'ready' else []
+        overdue = bool(metadata and metadata.lifecycle_status == 'active' and metadata.review_on and metadata.review_on < date.today())
+        return render(request, "document.html", active="knowledge", title="Просмотр документа", document=document,
+                      extraction=extraction, metadata=metadata, text_parts=parts, overdue=overdue)
+
+    @app.post("/documents/{document_id}/metadata")
+    def save_metadata(document_id: int, metadata: Annotated[MetadataInput, Form()]):
+        with sessions.begin() as db:
+            if db.get(Document, document_id) is None:
+                raise HTTPException(404, "Документ не найден.")
+            record = db.get(DocumentMetadata, document_id)
+            if record is None:
+                record = DocumentMetadata(document_id=document_id)
+                db.add(record)
+            for key, value in metadata.model_dump().items():
+                setattr(record, key, value)
+            record.updated_at = now()
+        logger.info("Сохранены реквизиты; документ=%d", document_id)
+        return {"message": "Реквизиты сохранены локально."}
 
     @app.post("/documents/{document_id}/extract")
     def extract_document(document_id: int):

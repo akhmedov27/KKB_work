@@ -1,5 +1,6 @@
 """Document processing without holding a database transaction during parsing."""
 from pathlib import Path
+import json
 from app.extraction import ExtractionResult, extract_local
 from app.models import Document, DocumentExtraction, now
 
@@ -20,5 +21,6 @@ def process_document(document_id, sessions, folder: Path):
             stored = DocumentExtraction(document_id=document_id)
             db.add(stored)
         stored.status, stored.text, stored.notice = result.status, result.text, result.notice
+        stored.source_map_json = json.dumps([source.model_dump() for source in result.sources], ensure_ascii=False)
         stored.processed_at = now()
     return result

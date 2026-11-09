@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from zipfile import ZipFile
 
-from app.extraction import ExtractionResult, MAX_TEXT_CHARS
+from app.extraction import ExtractionResult, MAX_TEXT_CHARS, SourceSpan
 
 MAX_UNPACKED = 32 * 1024 * 1024
 MAX_ENTRIES = 2000
@@ -22,6 +22,7 @@ class TextBuffer:
         self.parts = []
         self.size = 0
         self.has_content = False
+        self.sources = []
 
     def add(self, value, *, content=True):
         text = str(value).strip() if value is not None else ''
@@ -33,10 +34,17 @@ class TextBuffer:
         self.parts.append(text)
         self.has_content |= content
 
+    def source_start(self):
+        return self.size + (1 if self.parts else 0)
+
+    def source_end(self, start, label):
+        if self.size > start:
+            self.sources.append(SourceSpan(start=start, end=self.size, label=label))
+
     def finish(self, empty_notice):
         if not self.has_content:
             return ExtractionResult(status='empty', notice=empty_notice)
-        return ExtractionResult(status='ready', text='\n'.join(self.parts), notice='Текст извлечён локально. Проверьте полноту и порядок по оригиналу.')
+        return ExtractionResult(status='ready', text='\n'.join(self.parts), sources=self.sources, notice='Текст извлечён локально. Проверьте полноту и порядок по оригиналу.')
 
 
 def check_office_package(path, suffix):
@@ -81,6 +89,7 @@ def extract_docx(path):
                     buffer.add(' | '.join(values))
         else:
             buffer.add(block.text)
+    buffer.source_end(0, 'Основной текст DOCX')
     return buffer.finish('В основном содержимом DOCX не найден текст. Колонтитулы, текстовые поля и изображения не извлекаются.')
 
 
@@ -96,6 +105,7 @@ def extract_xlsx(path):
         for sheet in workbook.worksheets:
             if (sheet.max_row or 0) > MAX_ROWS or (sheet.max_column or 0) > MAX_CELLS:
                 raise InvalidDocument('Превышены допустимые размеры листа Excel.')
+            source_start = buffer.source_start()
             buffer.add(f'[Лист: {sheet.title}]', content=False)
             # Limits are also enforced during iteration for missing/false dimensions.
             for number, row in enumerate(sheet.iter_rows(values_only=True), start=1):
@@ -105,6 +115,7 @@ def extract_xlsx(path):
                 values = ['' if value is None else str(value) for value in row]
                 if any(values):
                     buffer.add(f'Строка {number}: ' + ' | '.join(values))
+            buffer.source_end(source_start, f'Лист: {sheet.title}')
     finally:
         workbook.close()
     return buffer.finish('В XLSX не найдены доступные значения. Формулы не вычисляются; доступны только сохранённые результаты.')
@@ -128,8 +139,10 @@ def extract_pdf(path):
         empty_pages = 0
         for index, page in enumerate(document):
             text = page.get_text('text', sort=True).strip()
+            source_start = buffer.source_start()
             buffer.add(f'[Страница {index + 1}]', content=False)
             buffer.add(text)
+            buffer.source_end(source_start, f'Страница {index + 1}')
             if not text:
                 empty_pages += 1
         result = buffer.finish('Текстовый слой не найден. Возможно, это скан. OCR на этапе QMS-004 не поддерживается.')

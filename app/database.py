@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from app.models import Base
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def build_engine(path: Path) -> Engine:
@@ -18,6 +18,9 @@ def build_engine(path: Path) -> Engine:
     @event.listens_for(engine, 'connect')
     def configure(connection, _):
         connection.execute('PRAGMA foreign_keys=ON')
+        from app.search import casefold, excerpt
+        connection.create_function('qms_casefold', 1, casefold, deterministic=True)
+        connection.create_function('qms_excerpt', 3, excerpt, deterministic=True)
 
     return engine
 
@@ -44,6 +47,8 @@ def initialize_database(engine: Engine, path: Path):
                 raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
             if version == 1 and not {'chat_messages', 'conversations', 'documents'}.issubset(tables):
                 raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
+            if version == 2 and not {'chat_messages', 'conversations', 'documents', 'document_extractions'}.issubset(tables):
+                raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
             if tables:
                 backup_dir = path.parent / 'backups'
                 backup_dir.mkdir(exist_ok=True)
@@ -55,6 +60,10 @@ def initialize_database(engine: Engine, path: Path):
                     source.backup(destination)
                     if destination.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                         raise RuntimeError('Проверка резервной копии не пройдена.')
+            if 'document_extractions' in tables:
+                columns = {row[1] for row in connection.exec_driver_sql('PRAGMA table_info(document_extractions)')}
+                if 'source_map_json' not in columns:
+                    connection.exec_driver_sql("ALTER TABLE document_extractions ADD COLUMN source_map_json TEXT NOT NULL DEFAULT '[]'")
             Base.metadata.create_all(connection)
             if legacy:
                 # Rebuild rather than add a nullable column: every message must

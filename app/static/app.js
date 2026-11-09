@@ -118,3 +118,17 @@ for (const form of document.querySelectorAll('.extract-form')) {
     }
   });
 }
+
+const metadataForm = document.querySelector('#metadata-form');
+if (metadataForm) metadataForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const button = metadataForm.querySelector('button'), result = document.querySelector('#metadata-result');
+  button.disabled = true; result.textContent = 'Сохраняем реквизиты…'; metadataForm.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch(metadataForm.action, {method: 'POST', body: new FormData(metadataForm)});
+    const data = await response.json();
+    if (response.ok) { location.hash = 'document-metadata'; location.reload(); return; }
+    result.textContent = data.detail;
+  } catch { result.textContent = 'Не удалось подтвердить сохранение. Проверьте соединение и повторите попытку.'; }
+  finally { button.disabled = false; metadataForm.setAttribute('aria-busy', 'false'); }
+});

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="eyebrow">ДОКУМЕНТЫ СИСТЕМЫ КАЧЕСТВА</div>
+<h1>База знаний</h1>
+<p class="subtitle">Локальный поиск по названию, номеру и извлечённому тексту документов.</p>
+<section class="panel knowledge-search" aria-labelledby="search-title">
+  <h2 id="search-title">Найти документ</h2>
+  <form action="/modules/knowledge" method="get" role="search">
+    <label for="knowledge-query">Слово или фраза</label>
+    <div class="search-line"><input id="knowledge-query" name="q" value="{{ q }}" maxlength="200" placeholder="Например: внутренний аудит" aria-describedby="search-help"><button type="submit">Найти</button></div>
+    <div class="metadata-grid">
+      <div><label for="status-filter">Статус документа</label><select id="status-filter" name="status"><option value="all" {{ 'selected' if status == 'all' }}>Все статусы</option>{% for key, label in document_statuses.items() %}<option value="{{ key }}" {{ 'selected' if status == key }}>{{ label }}</option>{% endfor %}</select></div>
+      <div><label for="category-filter">Тип документа</label><select id="category-filter" name="category"><option value="all" {{ 'selected' if category == 'all' }}>Все типы</option>{% for key, label in categories.items() %}<option value="{{ key }}" {{ 'selected' if category == key }}>{{ label }}</option>{% endfor %}</select></div>
+      <div><label for="department-filter">Подразделение</label><input id="department-filter" name="department" value="{{ department }}" maxlength="150" placeholder="Часть названия"></div>
+    </div>
+    <p id="search-help" class="muted">Поиск по вхождению фразы без учёта регистра. Без морфологии и поиска по смыслу. Статусы и типы заполняются вручную; результат может относиться к архивному или отменённому документу.</p>
+    <a href="/modules/knowledge">Сбросить поиск и фильтры</a>
+  </form>
+</section>
+<section class="panel knowledge-results" aria-labelledby="results-title">
+  <div class="panel-heading"><h2 id="results-title">{{ 'Результаты поиска' if q or status != 'all' or category != 'all' or department else 'Загруженные документы' }}</h2><span class="badge">Найдено: {{ total }}</span></div>
+  {% if results %}
+  {% if q %}<p class="muted">Ниже — фрагменты источников, а не ответы ИИ. Проверьте статус, редакцию и оригинал документа.</p>{% endif %}
+  <div class="table-scroll" role="region" aria-label="Загруженные документы" tabindex="0">
+    <table><caption>До 20 документов на странице, новые загрузки — первыми.</caption>
+    <thead><tr><th scope="col">Документ и источник</th><th scope="col">Реквизиты</th><th scope="col">Статус документа</th><th scope="col">Обработка</th></tr></thead>
+    <tbody>{% for item in results %}{% set doc = item.document %}{% set meta = item.metadata %}
+    <tr class="knowledge-result" data-document-id="{{ doc.id }}">
+      <td><a class="result-title" href="/documents/{{ doc.id }}">{{ meta.title if meta and meta.title else doc.original_name }}</a><small>{{ doc.original_name }} · {{ '%.1f'|format(doc.size / 1024) }} КиБ · {{ doc.created_at.strftime('%d.%m.%Y') }}</small>
+        {% if q %}{% if item.excerpt.text %}<blockquote>{{ item.excerpt.text }}</blockquote><a class="source-link" href="/documents/{{ doc.id }}#{{ item.excerpt.anchor }}">Источник: {{ item.excerpt.location or 'текст документа — расположение не сохранено' }} →</a>{% if not item.excerpt.location %}<small>Для страницы PDF или листа XLSX повторите извлечение.</small>{% endif %}
+        {% else %}<small>Совпадение в названии файла, названии или номере документа.</small><a class="source-link" href="/documents/{{ doc.id }}#document-metadata">Открыть реквизиты источника →</a>{% endif %}{% endif %}
+      </td>
+      <td><span>№ {{ meta.registration_number if meta and meta.registration_number else 'не указан' }}</span><small>Версия: {{ meta.version if meta and meta.version else 'не указана' }}</small><small>{{ categories[meta.category] if meta else 'Тип не указан' }}</small><small>{{ meta.department if meta and meta.department else 'Подразделение не указано' }}</small></td>
+      <td><span class="lifecycle {{ meta.lifecycle_status if meta else 'unspecified' }}">{{ document_statuses[meta.lifecycle_status] if meta else 'Не указан' }}</span>{% if item.overdue %}<small class="review-warning">Срок пересмотра истёк</small>{% endif %}</td>
+      <td>{{ extraction_labels.get(item.extraction_status, 'Не обработан') }}</td>
+    </tr>{% endfor %}</tbody></table>
+  </div>
+  {% else %}<div class="empty-state"><h3>{{ 'Ничего не найдено' if q or status != 'all' or category != 'all' or department else 'Документов пока нет' }}</h3><p>Измените запрос или фильтры, либо загрузите тестовый документ. Для поиска по содержимому текст должен быть успешно извлечён.</p></div>{% endif %}
+  <div class="history-controls">{% if previous_url %}<a href="{{ previous_url }}">← Предыдущая страница</a>{% endif %}<span>Страница {{ page }}</span>{% if next_url %}<a href="{{ next_url }}">Следующая страница →</a>{% endif %}</div>
+</section>
+<section class="panel upload">
+  <h2>Локальная загрузка файлов</h2>
+  <p id="upload-help">DOCX, XLSX, PDF — до {{ settings.max_upload_mb }} МиБ. После загрузки текст извлекается локально. Только тестовые документы без сведений о пациентах.</p>
+  <form id="upload-form" data-max-bytes="{{ settings.max_upload_mb * 1024 * 1024 }}" aria-busy="false"><label for="file">Выберите документ</label><input type="file" id="file" name="file" accept=".docx,.xlsx,.pdf" aria-describedby="upload-help" required><button type="submit">Загрузить локально</button></form>
+  <p id="upload-result" role="status" aria-live="polite"></p>
+</section>
+{% endblock %}
