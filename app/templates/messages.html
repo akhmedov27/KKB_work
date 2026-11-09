@@ -1,6 +1,6 @@
 {% for message in messages %}
 <article class="message {{ message.role }}" data-message-id="{{ message.id }}">
-  <div class="message-heading"><strong>{% if message.role == 'user' %}Вы{% elif message.provider == 'cloud' %}DeepSeek · {{ message.model }}{% elif message.provider == 'local' %}Локальный ИИ · {{ message.model }}{% else %}QMS · Тестовый помощник{% endif %}</strong><time datetime="{{ message.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ message.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</time></div>
+  <div class="message-heading"><strong>{% if message.role == 'user' %}Вы{% elif message.provider == 'groq' %}Groq · {{ message.model }}{% elif message.provider == 'cloud' %}DeepSeek · {{ message.model }}{% elif message.provider == 'local' %}Локальный ИИ · {{ message.model }}{% else %}QMS · Тестовый помощник{% endif %}</strong><time datetime="{{ message.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ message.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</time></div>
   <p>{{ message.content }}</p>
   {% if message.role == "assistant" and message.provider != "mock" %}<small>Проект ответа ИИ. Проверьте факты, ссылки и выводы по источникам.</small>{% endif %}
 </article>

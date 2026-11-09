@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import threading
 
-from app.providers import check_configuration, get_provider, ProviderUnavailable
+from app.providers import check_configuration, get_provider, ProviderUnavailable, cloud_label
 
 _GATE = threading.BoundedSemaphore(1)
 
@@ -24,7 +24,7 @@ class AIService:
             raise ProviderUnavailable('Проверьте длину запроса и явно добавленного фрагмента.', 422)
         check_configuration(self.settings)
         if self.settings.ai_provider == 'cloud' and not cloud_consent:
-            raise ProviderUnavailable('Подтвердите отправку текущего запроса и введённого фрагмента в DeepSeek.', 403)
+            raise ProviderUnavailable(f'Подтвердите отправку текущего запроса и введённого фрагмента в {cloud_label(self.settings)}.', 403)
         message, fragment = message.strip(), fragment.strip()
         user_text = message + ('\n\nЯвно добавленный пользователем фрагмент:\n' + fragment if fragment else '')
         if not _GATE.acquire(blocking=False):
@@ -33,7 +33,8 @@ class AIService:
             provider = get_provider(self.settings.ai_provider, self.settings)
             text = provider.reply(user_text, allow_cloud=True) if self.settings.ai_provider == 'cloud' else provider.reply(user_text)
             model = self.settings.cloud_model if self.settings.ai_provider == 'cloud' else self.settings.local_model if self.settings.ai_provider == 'local' else ''
-            return AIReply(text=text, user_text=user_text, provider=self.settings.ai_provider, model=model)
+            provider_id = 'groq' if self.settings.ai_provider == 'cloud' and self.settings.cloud_service == 'groq' else self.settings.ai_provider
+            return AIReply(text=text, user_text=user_text, provider=provider_id, model=model)
         finally:
             _GATE.release()
 

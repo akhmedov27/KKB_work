@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     max_upload_mb: int = Field(default=10, ge=1, le=100)
     ai_provider: Literal["mock", "local", "cloud"] = "mock"
     local_model: str = ""
+    cloud_service: Literal["deepseek", "groq"] = "deepseek"
     cloud_model: str = Field(default="deepseek-chat", max_length=100)
     cloud_endpoint: str = "https://api.deepseek.com/chat/completions"
     cloud_enabled: bool = False

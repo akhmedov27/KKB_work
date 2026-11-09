@@ -5,7 +5,7 @@
 <p class="subtitle">Единое рабочее пространство менеджера системы менеджмента качества.</p>
 <div class="status-grid">
   <div class="card"><span class="dot"></span> Данные на вашем устройстве<small>SQLite и локальное хранилище</small></div>
-  <div class="card">◇ Провайдер: {{ settings.ai_provider }}<small>{{ 'Тестовые ответы без подключения к моделям' if settings.ai_provider == 'mock' else 'DeepSeek API · только с разрешением' if settings.ai_provider == 'cloud' else 'Существующий сервер на этом компьютере' }}</small></div>
+  <div class="card">◇ Провайдер: {{ settings.ai_provider }}<small>{{ 'Тестовые ответы без подключения к моделям' if settings.ai_provider == 'mock' else cloud_label + ' API · только с разрешением' if settings.ai_provider == 'cloud' else 'Существующий сервер на этом компьютере' }}</small></div>
   <div class="card">▤ DOCX · XLSX · PDF<small>Лимит файла: {{ settings.max_upload_mb }} МиБ</small></div>
 </div>
 <div class="workspace">
@@ -28,7 +28,7 @@
       <label for="message">Ваш запрос</label>
       <textarea id="message" name="message" maxlength="4000" aria-describedby="message-help chat-error" required placeholder="Например: помоги составить план рабочего дня"></textarea>
       <details class="manual-context"><summary>Добавить фрагмент вручную (необязательно)</summary><label for="fragment">Только синтетический текст для этого запроса</label><textarea id="fragment" name="fragment" maxlength="6000" placeholder="Вставьте выбранный фрагмент, при необходимости укажите источник. Файл целиком и данные из базы не подставляются."></textarea><small>До 6000 символов. Этот текст будет отправлен вместе с запросом выбранному провайдеру.</small></details>
-      {% if settings.ai_provider == 'cloud' %}<label class="cloud-consent"><input type="checkbox" name="cloud_consent" value="true" required> Разрешаю отправить текущий запрос и явно введённый фрагмент в DeepSeek (api.deepseek.com). Использую только синтетические данные без сведений о пациентах и внутренних документов.</label>{% endif %}
+      {% if settings.ai_provider == 'cloud' %}<label class="cloud-consent"><input type="checkbox" name="cloud_consent" value="true" required> Разрешаю отправить текущий запрос и явно введённый фрагмент в {{ cloud_label }} ({{ cloud_host }}). Использую только синтетические данные без сведений о пациентах и внутренних документов.</label>{% endif %}
       <div class="form-bottom"><small id="message-help">До 4000 символов. {{ 'Ответы MockProvider тестовые.' if settings.ai_provider == 'mock' else 'Ответ ИИ требует проверки человеком.' }} История не отправляется.</small><button type="submit">Отправить ↑</button></div>
     </form>
     <p id="chat-status" class="muted" role="status"></p><p id="chat-error" class="error" role="alert"></p>
@@ -53,7 +53,7 @@
     </section>
     <section class="panel"><h2>Быстрый доступ</h2><a class="quick" href="/modules/knowledge">▤ База знаний <span>↗</span></a><a class="quick" href="/modules/documents">▧ Документы <span>↗</span></a><a class="quick" href="/modules/audits">☑ Внутренние аудиты <span>↗</span></a><small>Модули пока доступны как заглушки.</small></section>
     <section class="panel"><h2>Последние документы</h2>{% for doc in documents %}<div class="document"><a href="/documents/{{ doc.id }}">{{ doc.original_name }}</a><small>{{ doc.size }} байт · {{ doc.created_at.strftime('%d.%m.%Y') }}</small></div>{% else %}<p class="muted">Пока нет загруженных файлов.</p>{% endfor %}<a href="/modules/knowledge">Перейти к загрузке →</a></section>
-    <section class="notice"><strong>Контроль передачи</strong><p>Файлы и старая переписка не передаются ИИ. {% if settings.ai_provider == "cloud" %}Текущий текст может быть отправлен в DeepSeek только с вашей отметкой на каждый запрос.{% else %}Облачная передача для выбранного режима не выполняется.{% endif %}</p></section>
+    <section class="notice"><strong>Контроль передачи</strong><p>Файлы и старая переписка не передаются ИИ. {% if settings.ai_provider == "cloud" %}Текущий текст может быть отправлен в {{ cloud_label }} только с вашей отметкой на каждый запрос.{% else %}Облачная передача для выбранного режима не выполняется.{% endif %}</p></section>
   </div>
 </div>
 {% endblock %}

@@ -8,7 +8,21 @@ import httpx
 
 from app.config import Settings
 
-DEEPSEEK_ENDPOINTS = {'https://api.deepseek.com/chat/completions', 'https://api.deepseek.com/v1/chat/completions'}
+CLOUD_SERVICES = {
+    'deepseek': {'label': 'DeepSeek', 'host': 'api.deepseek.com', 'endpoints': {
+        'https://api.deepseek.com/chat/completions', 'https://api.deepseek.com/v1/chat/completions'}},
+    'groq': {'label': 'Groq', 'host': 'api.groq.com', 'endpoints': {
+        'https://api.groq.com/openai/v1/chat/completions'}},
+}
+
+
+def cloud_label(settings):
+    return CLOUD_SERVICES[settings.cloud_service]['label']
+
+
+def cloud_host(settings):
+    return CLOUD_SERVICES[settings.cloud_service]['host']
+
 SYSTEM_PROMPT = (
     'Ты — помощник менеджера СМК. Отвечай по-русски. Используются только синтетические тестовые данные. '
     'Не придумывай требования, источники, номера разделов или установленные факты несоответствий. '
@@ -36,14 +50,16 @@ class MockProvider:
 
 def check_configuration(settings):
     if settings.ai_provider == 'cloud':
+        service = CLOUD_SERVICES[settings.cloud_service]
+        label = service['label']
         if not settings.cloud_enabled:
-            raise ProviderUnavailable('Облачный ИИ выключен. Для подключения DeepSeek настройте .env и перезапустите приложение.')
-        if settings.cloud_endpoint not in DEEPSEEK_ENDPOINTS:
-            raise ProviderUnavailable('Для DeepSeek разрешён только HTTPS-адрес api.deepseek.com/chat/completions (также с /v1).')
+            raise ProviderUnavailable(f'Облачный ИИ выключен. Для подключения {label} настройте .env и перезапустите приложение.')
+        if settings.cloud_endpoint not in service['endpoints']:
+            raise ProviderUnavailable(f'Адрес не соответствует выбранному сервису {label}. Проверьте QMS_CLOUD_SERVICE и QMS_CLOUD_ENDPOINT по README.')
         if not settings.cloud_api_key.get_secret_value().strip():
-            raise ProviderUnavailable('Не задан API-ключ DeepSeek. Добавьте QMS_CLOUD_API_KEY в локальную конфигурацию, не в чат.')
+            raise ProviderUnavailable(f'Не задан API-ключ {label}. Добавьте QMS_CLOUD_API_KEY в локальную конфигурацию, не в чат.')
         if not settings.cloud_model.strip():
-            raise ProviderUnavailable('Не задана модель DeepSeek.')
+            raise ProviderUnavailable(f'Не задана модель {label}.')
     elif settings.ai_provider == 'local':
         try:
             url = urlsplit(settings.local_endpoint)
@@ -63,7 +79,9 @@ def completion(settings, endpoint, model, message, *, api_key=None, local=False)
     if api_key:
         headers['Authorization'] = 'Bearer ' + api_key
     payload = {'model': model, 'messages': [{'role': 'system', 'content': SYSTEM_PROMPT}, {'role': 'user', 'content': message}],
-               'stream': False, 'max_tokens': settings.ai_max_tokens}
+               'stream': False}
+    token_parameter = 'max_completion_tokens' if not local and settings.cloud_service == 'groq' else 'max_tokens'
+    payload[token_parameter] = settings.ai_max_tokens
     started = time.monotonic()
     try:
         # Local requests must never use an inherited outbound proxy. Cloud keeps
@@ -126,7 +144,7 @@ class CloudProvider:
             raise ProviderUnavailable('Облачный провайдер не выбран в конфигурации.')
         check_configuration(self.settings)
         if not allow_cloud:
-            raise ProviderUnavailable('Подтвердите отправку текущего запроса в DeepSeek отдельной отметкой.', 403)
+            raise ProviderUnavailable(f'Подтвердите отправку текущего запроса в {cloud_label(self.settings)} отдельной отметкой.', 403)
         return completion(self.settings, self.settings.cloud_endpoint, self.settings.cloud_model, message,
                           api_key=self.settings.cloud_api_key.get_secret_value())
 

@@ -34,7 +34,7 @@
 <main id="main-content" tabindex="-1">
   <header>
     <div class="breadcrumbs" aria-label="Вы находитесь здесь"><a href="/">Рабочее пространство</a><span aria-hidden="true"> / </span><span>{{ title }}</span></div>
-    <span class="badge">{{ "Без внешних подключений" if settings.ai_provider == "mock" else "Локальный сервер ИИ" if settings.ai_provider == "local" else "DeepSeek · запросы по разрешению" if settings.cloud_enabled else "DeepSeek · облако выключено" }}</span>
+    <span class="badge">{{ "Без внешних подключений" if settings.ai_provider == "mock" else "Локальный сервер ИИ" if settings.ai_provider == "local" else cloud_label + " · запросы по разрешению" if settings.cloud_enabled else cloud_label + " · облако выключено" }}</span>
   </header>
   <div class="content">{% block content %}{% endblock %}</div>
   <footer>QMS Assistant KKB · Только синтетические данные. Не загружайте сведения о пациентах.</footer>

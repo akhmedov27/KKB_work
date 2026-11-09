@@ -1,8 +1,9 @@
-"""Cloud UI checks: intercept /chat in the browser; NEVER call the real API."""
+"""Cloud UI checks: intercept /chat in the browser; NEVER call a real provider API."""
 import os
 from playwright.sync_api import sync_playwright, expect
 
 url = os.environ['QMS_TEST_URL']
+label = os.environ.get('QMS_TEST_CLOUD_LABEL', 'DeepSeek')
 with sync_playwright() as p:
     options = {'headless': True}
     if os.environ.get('QMS_CHROMIUM_PATH'):
@@ -21,7 +22,8 @@ with sync_playwright() as p:
     page.goto(url)
     consent = page.locator('[name=cloud_consent]')
     expect(consent).to_be_visible()
-    expect(page.locator('header')).to_contain_text('DeepSeek')
+    expect(page.locator('.cloud-consent')).to_contain_text(label)
+    expect(page.locator('header')).to_contain_text(label)
     page.locator('#message').fill('Синтетический вопрос')
     page.get_by_role('button', name='Отправить').click()
     assert requests == []
@@ -46,4 +48,4 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert not errors, errors
     browser.close()
-print('Cloud UI checks passed with browser-intercepted test responses; no real DeepSeek request')
+print('Cloud UI checks passed with browser-intercepted test responses; no real cloud API request')

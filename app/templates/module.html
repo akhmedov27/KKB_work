@@ -12,8 +12,9 @@
     <div><dt>ИИ-провайдер</dt><dd>{{ settings.ai_provider }}</dd></div>
     <div><dt>Облачная передача</dt><dd>{{ 'Разрешена в конфигурации, нужна отметка на каждый запрос' if settings.cloud_enabled and settings.ai_provider == 'cloud' else 'Отключена для текущего режима' }}</dd></div>
     <div><dt>Состояние ИИ</dt><dd>{{ ai_status }}</dd></div>
+    <div><dt>Облачный сервис</dt><dd>{{ cloud_label }}</dd></div>
     <div><dt>Модель запроса</dt><dd>{{ settings.cloud_model if settings.ai_provider == 'cloud' else settings.local_model if settings.ai_provider == 'local' else 'MockProvider' }}</dd></div>
-    <div><dt>Ключ DeepSeek</dt><dd>{{ 'Задан (значение скрыто)' if ai_key_present else 'Не задан' }}</dd></div>
+    <div><dt>Ключ {{ cloud_label }}</dt><dd>{{ 'Задан (значение скрыто)' if ai_key_present else 'Не задан' }}</dd></div>
     <div><dt>Лимит файла</dt><dd>{{ settings.max_upload_mb }} МиБ</dd></div>
     <div><dt>Хранение</dt><dd>На этом компьютере</dd></div>
   </dl>

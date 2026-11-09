@@ -20,7 +20,7 @@ from app.config import Settings
 from app.models import ChatMessage, Conversation, Document, DocumentExtraction, DocumentMetadata, now
 from app.database import SCHEMA_VERSION, build_engine, initialize_database
 from app.history import latest_conversation, list_conversations, message_page, save_exchange
-from app.providers import ProviderUnavailable
+from app.providers import ProviderUnavailable, cloud_label, cloud_host
 from app.storage import save_upload
 from app.documents import process_document
 from app.extraction import ProcessingBusy, STATUS_LABELS
@@ -39,7 +39,7 @@ MODULE_INFO = {
     "risks": ("Оценка и управление рисками процессов.", "Реестр рисков, расчёт ранга и контроль мероприятий пока не реализованы."),
     "audits": ("Планирование и сопровождение внутренних аудитов.", "Программы, чек-листы, несоответствия и отчёты пока не реализованы."),
     "reports": ("Отчётность системы менеджмента качества.", "Сводные таблицы, диаграммы и экспорт отчётов пока не реализованы."),
-    "settings": ("Текущие параметры приложения и оформление.", "ИИ подключается по конфигурации. DeepSeek требует ключа, включения облачного режима и разрешения на каждый запрос."),
+    "settings": ("Текущие параметры приложения и оформление.", "ИИ подключается по конфигурации. Groq и DeepSeek требуют ключа, включения облачного режима и разрешения на каждый запрос."),
 }
 
 
@@ -76,7 +76,7 @@ def create_app(settings: Settings | None = None):
     templates = Jinja2Templates(directory=ROOT / "templates")
 
     def render(request, template, **context):
-        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, "document_statuses": DOCUMENT_STATUSES, "categories": CATEGORY_LABELS, "ai_status": ai_service.status(), "ai_key_present": bool(settings.cloud_api_key.get_secret_value().strip()), **context})
+        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, "document_statuses": DOCUMENT_STATUSES, "categories": CATEGORY_LABELS, "ai_status": ai_service.status(), "ai_key_present": bool(settings.cloud_api_key.get_secret_value().strip()), "cloud_label": cloud_label(settings), "cloud_host": cloud_host(settings), **context})
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request, exc):

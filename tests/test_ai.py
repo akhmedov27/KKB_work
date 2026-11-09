@@ -217,3 +217,79 @@ def test_upgrade_v3_preserves_mock_identity(tmp_path):
     with closing(sqlite3.connect(tmp_path / 'qms.sqlite3')) as db:
         assert db.execute('SELECT DISTINCT provider, model FROM chat_messages').fetchall() == [('mock', '')]
         assert db.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION
+
+
+def groq_settings(tmp_path, **overrides):
+    return cloud_settings(tmp_path, **{'cloud_service': 'groq',
+                                     'cloud_endpoint': 'https://api.groq.com/openai/v1/chat/completions',
+                                     'cloud_model': 'llama-3.1-8b-instant', **overrides})
+
+
+def test_groq_request_consent_and_persistent_identity(tmp_path, monkeypatch):
+    calls = []
+    def handle(request):
+        calls.append(request)
+        assert request.url == 'https://api.groq.com/openai/v1/chat/completions'
+        assert request.headers['authorization'] == 'Bearer SYNTHETIC_KEY_NOT_REAL'
+        body = json.loads(request.content)
+        assert body['model'] == 'llama-3.1-8b-instant'
+        assert body['max_completion_tokens'] == 512 and 'max_tokens' not in body
+        assert len(body['messages']) == 2
+        assert 'Фрагмент для Groq' in body['messages'][1]['content']
+        return reply_response('Синтетический ответ Groq')
+    install_transport(monkeypatch, handle)
+    with TestClient(create_app(groq_settings(tmp_path))) as client:
+        home = client.get('/').text
+        assert 'фрагмент в Groq (api.groq.com)' in home
+        assert 'фрагмент в DeepSeek' not in home
+        assert 'Ключ Groq' in client.get('/modules/settings').text
+        assert calls == []
+        response = client.post('/chat', data={'message': 'Без разрешения'})
+        assert response.status_code == 403 and 'Groq' in response.text and calls == []
+        response = client.post('/chat', data={'message': 'Тест', 'fragment': 'Фрагмент для Groq', 'cloud_consent': 'true'})
+        assert response.status_code == 200 and 'Groq · llama-3.1-8b-instant' in response.text
+        assert len(calls) == 1
+    # Changing current configuration must not relabel historical responses.
+    with TestClient(create_app(cloud_settings(tmp_path))) as client:
+        html = client.get('/').text
+        assert 'Groq · llama-3.1-8b-instant' in html
+        assert 'DeepSeek · llama-3.1-8b-instant' not in html
+    engine = build_engine(tmp_path / 'qms.sqlite3')
+    with Session(engine) as db:
+        rows = db.scalars(select(ChatMessage).order_by(ChatMessage.id)).all()
+        assert rows[1].provider == 'groq'
+    engine.dispose()
+
+
+@pytest.mark.parametrize('endpoint', ['https://api.deepseek.com/chat/completions', 'https://api.groq.com.evil.invalid/openai/v1/chat/completions', 'http://api.groq.com/openai/v1/chat/completions', 'https://api.groq.com/openai/v1/chat/completions?key=private'])
+def test_groq_service_endpoint_pair_prevents_key_misdirection(tmp_path, monkeypatch, endpoint):
+    install_transport(monkeypatch, lambda request: pytest.fail('Key must not leave application'))
+    with pytest.raises(ProviderUnavailable):
+        AIService(groq_settings(tmp_path, cloud_endpoint=endpoint)).reply('Тест', cloud_consent=True)
+
+
+@pytest.mark.parametrize('changes', [{'cloud_enabled': False}, {'cloud_api_key': ''}, {'cloud_model': ''}])
+def test_groq_disabled_missing_key_or_model_no_request(tmp_path, monkeypatch, changes):
+    install_transport(monkeypatch, lambda request: pytest.fail('Must not send'))
+    with pytest.raises(ProviderUnavailable):
+        AIService(groq_settings(tmp_path, **changes)).reply('Тест', cloud_consent=True)
+
+
+def test_existing_deepseek_configuration_remains_valid(tmp_path):
+    from app.providers import check_configuration
+    settings = cloud_settings(tmp_path)
+    assert settings.cloud_service == 'deepseek'
+    check_configuration(settings)
+
+
+def test_groq_rate_limit_has_no_fallback_or_retries(tmp_path, monkeypatch):
+    calls = []
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(429, text='PRIVATE_RESPONSE')
+    install_transport(monkeypatch, handle)
+    with TestClient(create_app(groq_settings(tmp_path))) as client:
+        response = client.post('/chat', data={'message': 'Тест', 'cloud_consent': 'true'})
+        assert response.status_code == 429 and len(calls) == 1
+        assert 'PRIVATE_RESPONSE' not in response.text
+        assert 'data-message-id=' not in client.get('/').text
