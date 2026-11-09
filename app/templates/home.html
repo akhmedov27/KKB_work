@@ -1,4 +1,56 @@
-{% extends 'base.html' %}{% block content %}
-<div class="eyebrow">ПЕРСОНАЛЬНЫЙ ПОМОЩНИК СМК</div><h1>Порядок в процессах.<br>Уверенность в качестве.</h1><p class="subtitle">Единое рабочее пространство менеджера системы менеджмента качества.</p>
-<div class="status-grid"><div class="card"><span class="dot"></span> Данные на вашем устройстве<small>SQLite и локальное хранилище</small></div><div class="card">◇ Тестовый ИИ-провайдер<small>MockProvider · без подключения к моделям</small></div><div class="card">▤ DOCX · XLSX · PDF<small>Лимит файла: {{ settings.max_upload_mb }} МБ</small></div></div>
-<div class="workspace"><section class="panel chat"><div class="panel-heading"><div><h2>Чат с помощником</h2><small>Проверьте отправку запроса и сохранение истории</small></div><span class="badge">Тестовый чат</span></div><div id="messages" aria-live="polite">{% if not messages %}<div class="empty"><span class="empty-icon">✦</span><h3>Начните диалог</h3><p>Введите тестовый запрос. Помощник вернёт демонстрационный ответ без анализа документов.</p></div>{% endif %}{% include 'messages.html' %}</div><form id="chat-form" hx-post="/chat" hx-target="#messages" hx-swap="beforeend" hx-request='{"timeout":30000}' aria-busy="false"><label for="message">Ваш запрос</label><textarea id="message" name="message" maxlength="4000" aria-describedby="message-help chat-error" required placeholder="Например: помоги составить план рабочего дня"></textarea><div class="form-bottom"><small id="message-help">До 4000 символов. Ответы MockProvider не являются рекомендациями.</small><button type="submit">Отправить ↑</button></div></form><p id="chat-status" class="muted" role="status"></p><p id="chat-error" class="error" role="alert"></p></section><div class="right-column"><section class="panel"><h2>Быстрый доступ</h2><a class="quick" href="/modules/knowledge">▤ База знаний <span>↗</span></a><a class="quick" href="/modules/documents">▧ Документы <span>↗</span></a><a class="quick" href="/modules/audits">☑ Внутренние аудиты <span>↗</span></a><small>Модули пока доступны как заглушки.</small></section><section class="panel"><h2>Последние документы</h2>{% for doc in documents %}<div class="document">{{ doc.original_name }}<small>{{ doc.size }} байт · {{ doc.created_at.strftime('%d.%m.%Y') }}</small></div>{% else %}<p class="muted">Пока нет загруженных файлов.</p>{% endfor %}<a href="/modules/knowledge">Перейти к загрузке →</a></section><section class="notice"><strong>Локальный режим</strong><p>Файлы и переписка остаются на этом компьютере. Облачный ИИ не подключён.</p></section></div></div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="eyebrow">ПЕРСОНАЛЬНЫЙ ПОМОЩНИК СМК</div>
+<h1>Порядок в процессах.<br>Уверенность в качестве.</h1>
+<p class="subtitle">Единое рабочее пространство менеджера системы менеджмента качества.</p>
+<div class="status-grid">
+  <div class="card"><span class="dot"></span> Данные на вашем устройстве<small>SQLite и локальное хранилище</small></div>
+  <div class="card">◇ Провайдер: {{ settings.ai_provider }}<small>{{ 'Тестовые ответы без подключения к моделям' if settings.ai_provider == 'mock' else 'Провайдер пока недоступен' }}</small></div>
+  <div class="card">▤ DOCX · XLSX · PDF<small>Лимит файла: {{ settings.max_upload_mb }} МиБ</small></div>
+</div>
+<div class="workspace">
+  <section class="panel chat">
+    <div class="panel-heading"><div><h2 id="conversation-title">{{ conversation.title }}</h2><small>Чат с помощником · Тестовый режим</small></div><span class="badge">Локальная история</span></div>
+    <div class="history-controls">
+      <small>До 50 сообщений на странице. Время указано в UTC.</small>
+      <a href="/?conversation_id={{ conversation.id }}">Обновить историю</a>
+      {% if has_older %}<a id="older-messages" href="/?conversation_id={{ conversation.id }}&amp;before_id={{ messages[0].id }}">← Более ранние сообщения</a>{% endif %}
+      {% if before_id %}<a href="/?conversation_id={{ conversation.id }}">К новым сообщениям →</a>{% endif %}
+    </div>
+    <div id="messages" role="log" aria-label="Сообщения диалога" aria-live="polite">
+      {% if not messages %}<div class="empty"><span class="empty-icon">✦</span><h3>{{ 'На этой странице нет сообщений' if before_id else 'Начните диалог' }}</h3><p>MockProvider возвращает демонстрационный ответ без анализа документов.</p></div>{% endif %}
+      {% include 'messages.html' %}
+    </div>
+    {% if not before_id %}
+    <form id="chat-form" hx-post="/chat" hx-target="#messages" hx-swap="beforeend" hx-request='{"timeout":30000}' aria-busy="false">
+      <input type="hidden" name="conversation_id" value="{{ conversation.id }}">
+      <label for="message">Ваш запрос</label>
+      <textarea id="message" name="message" maxlength="4000" aria-describedby="message-help chat-error" required placeholder="Например: помоги составить план рабочего дня"></textarea>
+      <div class="form-bottom"><small id="message-help">До 4000 символов. Ответы MockProvider не являются рекомендациями.</small><button type="submit">Отправить ↑</button></div>
+    </form>
+    <p id="chat-status" class="muted" role="status"></p><p id="chat-error" class="error" role="alert"></p>
+    {% else %}<p class="notice">Вы просматриваете ранние сообщения. <a href="/?conversation_id={{ conversation.id }}">Вернуться к диалогу и написать запрос →</a></p>{% endif %}
+  </section>
+  <div class="right-column">
+    <section class="panel history-panel" aria-labelledby="history-title">
+      <h2 id="history-title">История диалогов</h2>
+      <form id="new-conversation" action="/conversations" method="post">
+        <label for="conversation-name">Название нового диалога</label>
+        <input id="conversation-name" name="title" maxlength="120" required placeholder="Например: План работы">
+        <button type="submit">Создать диалог</button>
+      </form>
+      <nav class="conversation-list" aria-label="Сохранённые диалоги">
+        {% for item in conversations %}<a href="/?conversation_id={{ item.id }}" {% if item.id == conversation.id %}class="selected" aria-current="true"{% endif %}><span>{{ item.title }}</span><small>Создан {{ item.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</small></a>{% endfor %}
+      </nav>
+      <div class="history-controls">
+        {% if conversation_page > 1 %}<a href="/?conversation_id={{ conversation.id }}&amp;conversation_page={{ conversation_page - 1 }}">← Назад</a>{% endif %}
+        {% if has_more_conversations %}<a href="/?conversation_id={{ conversation.id }}&amp;conversation_page={{ conversation_page + 1 }}">Ещё диалоги →</a>{% endif %}
+      </div>
+      <small>Последние активные диалоги — первыми. Для обновления порядка обновите страницу.</small>
+    </section>
+    <section class="panel"><h2>Быстрый доступ</h2><a class="quick" href="/modules/knowledge">▤ База знаний <span>↗</span></a><a class="quick" href="/modules/documents">▧ Документы <span>↗</span></a><a class="quick" href="/modules/audits">☑ Внутренние аудиты <span>↗</span></a><small>Модули пока доступны как заглушки.</small></section>
+    <section class="panel"><h2>Последние документы</h2>{% for doc in documents %}<div class="document">{{ doc.original_name }}<small>{{ doc.size }} байт · {{ doc.created_at.strftime('%d.%m.%Y') }}</small></div>{% else %}<p class="muted">Пока нет загруженных файлов.</p>{% endfor %}<a href="/modules/knowledge">Перейти к загрузке →</a></section>
+    <section class="notice"><strong>Локальный режим</strong><p>Файлы и переписка остаются на этом компьютере. Облачный ИИ не подключён.</p></section>
+  </div>
+</div>
+{% endblock %}

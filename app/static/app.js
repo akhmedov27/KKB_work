@@ -87,3 +87,13 @@ if (upload) upload.addEventListener('submit', async e => {
     button.disabled = false; button.textContent = 'Загрузить локально'; upload.setAttribute('aria-busy', 'false');
   }
 });
+const newConversation = document.querySelector('#new-conversation');
+if (newConversation) {
+  const title = newConversation.querySelector('input');
+  title.addEventListener('input', () => title.setCustomValidity(''));
+  newConversation.addEventListener('submit', e => {
+    if (!title.value.trim()) {
+      e.preventDefault(); title.setCustomValidity('Введите название диалога.'); title.reportValidity();
+    }
+  });
+}
