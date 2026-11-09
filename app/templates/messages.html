@@ -1,0 +1,1 @@
+{% for message in messages %}<article class="message {{ message.role }}"><strong>{{ 'Вы' if message.role == 'user' else 'QMS · Тестовый помощник' }}</strong><p>{{ message.content }}</p></article>{% endfor %}
