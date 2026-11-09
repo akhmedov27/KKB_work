@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 import uuid
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, Query
 from fastapi.responses import RedirectResponse, Response
 from openpyxl.utils import get_column_letter
 from pydantic import ValidationError
@@ -18,6 +18,7 @@ from app.incident_stats import DIMENSIONS, Filters, register_rows, statistics
 from app.incident_export import statistics_export, validation_export
 from app.models import IncidentBatch, IncidentRecord, IncidentStagedRow, IncidentUpload
 from app.storage import save_upload
+from app.department_aliases import selected_departments, suggestions
 
 
 def make_router(sessions, settings, render, logger):
@@ -30,8 +31,13 @@ def make_router(sessions, settings, render, logger):
 
     def filters_for(request):
         values = {key: value for key, value in request.query_params.items() if value != ''}
+        for key in ('departments', 'exclude_statuses'):
+            values[key] = request.query_params.getlist(key)
         try:
-            return Filters.model_validate(values)
+            filters = Filters.model_validate(values)
+            filters.departments = selected_departments(filters)
+            filters.department = ''
+            return filters
         except (ValidationError, ValueError):
             raise HTTPException(400, 'Проверьте даты, номер набора и длину фильтров. Для сравнения нужны обе даты второго периода; начало не позже окончания.') from None
 
@@ -59,14 +65,23 @@ def make_router(sessions, settings, render, logger):
             for key in ('department', 'group_name', 'subgroup', 'event_name', 'importance', 'status'):
                 field = getattr(IncidentRecord, key)
                 options[key] = db.scalars(select(field).where(IncidentRecord.batch_id == batch.id).distinct().order_by(field).limit(500)).all()
-        args = {key: str(value) for key, value in filters.model_dump().items() if value is not None and value != ''}
+        args = {key: value for key, value in filters.model_dump(mode='json').items() if value is not None and value != '' and value != []}
         def url(page_number):
-            return '/modules/incidents?' + urlencode({**args, 'page': page_number})
+            return '/modules/incidents?' + urlencode({**args, 'page': page_number}, doseq=True)
         return page(request, 'incidents.html', batch=batch, batches=batches, upload=upload, summary=json.loads(batch.summary_json),
                     stats=stats, rows=rows, filters=filters, options=options,
-                    export_url='/incidents/export.xlsx?' + urlencode(args),
+                    export_url='/incidents/export.xlsx?' + urlencode(args, doseq=True),
                     previous_url=url(filters.page-1) if filters.page > 1 else None,
                     next_url=url(filters.page+1) if filters.page*50 < stats['total'] else None)
+
+    @router.get('/incidents/departments')
+    def department_search(batch_id: int, q: str = Query('', max_length=500)):
+        with sessions() as db:
+            batch = db.get(IncidentBatch, batch_id)
+            if batch is None or batch.state != 'confirmed':
+                raise HTTPException(404)
+            actual = db.scalars(select(IncidentRecord.department).where(IncidentRecord.batch_id == batch_id).distinct()).all()
+        return {'items': suggestions(actual, q)}
 
     @router.post('/incidents/uploads')
     async def upload(request: Request, file: UploadFile = File(...)):

@@ -78,8 +78,8 @@ def statistics_export(db, batch, upload, filters, stats, rows):
     append(summary, ['Уникальных номеров', stats['unique']])
     append(summary, ['Доля в таблицах', 'Число записей категории / количество в текущей выборке × 100%. Пустые категории включены.'])
     for key, value in filters.model_dump().items():
-        if key != 'page' and value is not None and value != '':
-            append(summary, [{**DIMENSIONS, 'batch_id':'Номер набора', 'date_from':'Дата инцидента с', 'date_to':'Дата инцидента по', 'compare_from':'Второй период с', 'compare_to':'Второй период по', 'number':'Номер инцидента'}.get(key, key), value])
+        if key != 'page' and value is not None and value != '' and value != []:
+            append(summary, [{**DIMENSIONS, 'batch_id':'Номер набора', 'date_from':'Дата инцидента с', 'date_to':'Дата инцидента по', 'compare_from':'Второй период с', 'compare_to':'Второй период по', 'number':'Номер инцидента', 'departments':'Выбранные отделения', 'exclude_statuses':'Исключённые статусы', 'pareto_by':'Поле Парето', 'pareto_cutoff':'Порог накопленной доли, %', 'min_repeat':'Минимум записей для повторяемости'}.get(key, key), '; '.join(value) if isinstance(value, list) else DIMENSIONS[value] if key == 'pareto_by' else value])
     if stats['comparison']:
         for key, value in stats['comparison'].items():
             append(summary, ['Сравнение: ' + {'count':'Количество во втором периоде','delta':'Изменение количества','percent':'Изменение, %','days':'Длительность второго периода, дней','overlap':'Периоды пересекаются'}[key], str(value) if value is not None else 'Не рассчитывается при базе 0'])
@@ -103,6 +103,34 @@ def statistics_export(db, batch, upload, filters, stats, rows):
         chart.add_data(Reference(monthly, min_col=2, min_row=1, max_row=monthly.max_row), titles_from_data=True)
         chart.set_categories(Reference(monthly, min_col=1, min_row=2, max_row=monthly.max_row))
         monthly.add_chart(chart, 'D2')
+    quarter_sheet = workbook.create_sheet('Кварталы')
+    append(quarter_sheet, ['Квартал', 'Количество'])
+    for item in stats['quarters']:
+        append(quarter_sheet, [item['label'], item['count']])
+    pareto_sheet = workbook.create_sheet('Парето')
+    append(pareto_sheet, [DIMENSIONS[filters.pareto_by], 'Количество', 'Доля, %', 'Накопленная доля, %', 'Включено до порога'])
+    for item in stats['pareto']:
+        append(pareto_sheet, [item['label'], item['count'], float(item['percent']), float(item['cumulative']), 'Да' if item['in_core'] else 'Нет'])
+    if stats['pareto']:
+        count = min(16, pareto_sheet.max_row)
+        bars = BarChart(); bars.title = 'Парето: первые 15 категорий'; bars.y_axis.title = 'Количество'
+        bars.add_data(Reference(pareto_sheet, min_col=2, min_row=1, max_row=count), titles_from_data=True)
+        bars.set_categories(Reference(pareto_sheet, min_col=1, min_row=2, max_row=count))
+        line = LineChart(); line.y_axis.axId = 200; line.y_axis.title = 'Накопленная доля, %'
+        line.y_axis.scaling.min = 0; line.y_axis.scaling.max = 100; line.y_axis.crosses = 'max'
+        line.add_data(Reference(pareto_sheet, min_col=4, min_row=1, max_row=count), titles_from_data=True)
+        bars += line
+        pareto_sheet.add_chart(bars, 'G2')
+    for key, title in [('department_comparison','Сравнение отделений'), ('group_comparison','Сравнение групп')]:
+        if stats['comparison']:
+            sheet = workbook.create_sheet(title)
+            append(sheet, ['Категория', 'Текущий период', 'Второй период', 'Разница', 'Изменение, % (при базе 0 пусто)'])
+            for item in stats[key]:
+                append(sheet, [item['label'], item['current'], item['previous'], item['delta'], float(item['percent']) if item['percent'] is not None else None])
+    cross_sheet = workbook.create_sheet('Отделения и группы')
+    append(cross_sheet, ['Отделение', 'Группа', 'Количество', 'Доля внутри отделения, %', 'Доля всей выборки, %'])
+    for item in stats['cross_rows']:
+        append(cross_sheet, [item['department'], item['group'], item['count'], float(item['department_percent']), float(item['total_percent'])])
     repeated = workbook.create_sheet('Повторяемость')
     append(repeated, ['Отделение', 'Вид события', 'Количество записей', 'Первая дата', 'Последняя дата'])
     for row in stats['repeated']:

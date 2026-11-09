@@ -1,0 +1,365 @@
+[
+  {
+    "name": "Аллергологическое",
+    "aliases": [
+      "АЛЛО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Анестезиология-реанимация №2 (кардиореанимация)",
+    "aliases": [
+      "ОАР 2"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Анестезиология-реанимация №3 (гнойно-септическая)",
+    "aliases": [
+      "ОАР 3"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Анестезиология-реанимация №4 (ожоговое)",
+    "aliases": [
+      "ОАР 4"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Анестезиология-реанимация №5 (нейрореанимация)",
+    "aliases": [
+      "ОАР 5"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Анестезиология-реанимация №6",
+    "aliases": [
+      "ОАР 6"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Анестезиология-реанимация №7",
+    "aliases": [
+      "ОАР 7"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Гастроэнтерологическое",
+    "aliases": [
+      "ГЭО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Гинекологическое",
+    "aliases": [
+      "ГИН"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Гнойная хирургия",
+    "aliases": [
+      "ГХО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Дневной стационар - Гематология",
+    "aliases": [
+      "ДС ГЕМ"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Дневной стационар гемодиализа",
+    "aliases": [
+      "ДС ГД"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Дневной стационар при КДП",
+    "aliases": [
+      "ДС КДП"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Дневной стационар при гастроэнтерологическом отделении",
+    "aliases": [
+      "ДС ГЭО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Дневной стационар при отделении медицинской реабилитации",
+    "aliases": [
+      "ДС МР"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Дневной стационар при оториноларингологическом отделении",
+    "aliases": [
+      "ДС ЛОР"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Кардиологическое №1",
+    "aliases": [
+      "КО 1"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Кардиологическое №2",
+    "aliases": [
+      "КО 2"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Кардиологическое №3",
+    "aliases": [
+      "КО 3"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Кардиологическое №4",
+    "aliases": [
+      "КО 4"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Кардиохирургическое",
+    "aliases": [
+      "КХО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Колопроктологическое",
+    "aliases": [
+      "КПО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Микрохирургическое, в т.ч.пластическая хирургия",
+    "aliases": [
+      "МХО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Неврологическое для больных с ОНМК",
+    "aliases": [
+      "НО ОНМК"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Неврологическое отделение",
+    "aliases": [
+      "НО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Нейрохирургическое №1",
+    "aliases": [
+      "НХО 1"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Нейрохирургическое №2",
+    "aliases": [
+      "НХО 2"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Нефрологическое",
+    "aliases": [
+      "НФО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Ожоговое",
+    "aliases": [
+      "ОЖО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Ортопедическое",
+    "aliases": [
+      "ОРТО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отделение анестезиологии-реанимации №1",
+    "aliases": [
+      "ОАР 1"
+    ],
+    "reference_only": true
+  },
+  {
+    "name": "Отделение гематологии и химиотерапии № 1",
+    "aliases": [
+      "ГЕМХТ 1"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отделение гематологии и химиотерапии № 2",
+    "aliases": [
+      "ГЕМХТ 2"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отделение медицинской реабилитации",
+    "aliases": [
+      "ОМР"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отделение платных услуг",
+    "aliases": [
+      "ОПУ"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отделение скорой помощи",
+    "aliases": [
+      "ОСП"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отделение хирургического лечения сложных нарушений ритма сердца и электрокардиостимуляции",
+    "aliases": [
+      "ХО НРС/ЭКС",
+      "НРС"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Отоларингологическое",
+    "aliases": [
+      "ЛОР"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Профпатологическое",
+    "aliases": [
+      "ППО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Пульмонологическое отделение (чистое, главный корпус)",
+    "aliases": [
+      "ПУЛЬМО (чист., главн.)"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Сосудистая хирургия",
+    "aliases": [
+      "СХО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Торакальной хирургии",
+    "aliases": [
+      "ТХО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Травматологическое",
+    "aliases": [
+      "ТРО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Травматолого-ортопедическое отделение №2",
+    "aliases": [
+      "ТО 2"
+    ],
+    "reference_only": true
+  },
+  {
+    "name": "Травматолого-ортопедическое отделение №3",
+    "aliases": [
+      "ТО 3"
+    ],
+    "reference_only": true
+  },
+  {
+    "name": "Травматолого-ортопедическое №1 (сочетанная травма)",
+    "aliases": [
+      "ТО 1"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Урологическое",
+    "aliases": [
+      "УРО"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Хирургическое №1",
+    "aliases": [
+      "ХО 1"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Хирургическое №2",
+    "aliases": [
+      "ХО 2"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Хронический гемодиализ",
+    "aliases": [
+      "ХГД"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Челюстно-лицевая хирургия",
+    "aliases": [
+      "ЧЛХ"
+    ],
+    "reference_only": false
+  },
+  {
+    "name": "Эндокринологическое",
+    "aliases": [],
+    "reference_only": false
+  }
+]

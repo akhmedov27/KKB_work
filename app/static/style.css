@@ -90,3 +90,30 @@ input[type=file] { max-width: 100%; color: var(--text); }
 .bar-track { height: 16px; background: var(--soft); border-radius: 4px; }
 .bar { height: 100%; background: var(--accent); border-radius: 4px; min-width: 0; }
 @media(max-width: 1100px) { .incident-distributions { grid-template-columns: 1fr; } }
+.department-picker { position: relative; }
+#department-results { list-style: none; padding: 4px; margin: 4px 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); max-height: 260px; overflow-y: auto; }
+#department-results button { width: 100%; background: transparent; color: var(--text); text-align: left; white-space: normal; font-size: 13px; }
+#department-results [aria-selected=true], #department-results li:hover { background: var(--soft); }
+#selected-departments { display: flex; flex-wrap: wrap; gap: 8px; }
+.department-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--soft); border-radius: 8px; max-width: 100%; overflow-wrap: anywhere; }
+.department-chip button { flex-shrink: 0; padding: 2px 8px; font-size: 18px; }
+.status-exclusions { border: 1px solid var(--line); border-radius: 8px; margin: 14px 0; padding: 12px; }
+.status-exclusions label { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; }
+.analytics-settings { margin: 14px 0; }
+.pareto-svg { width: 100%; height: auto; background: var(--bg); border-radius: 8px; margin: 16px 0; }
+.pareto-svg text { fill: var(--text); font: 11px 'Segoe UI',sans-serif; }
+.pareto-bar { fill: var(--accent); }
+.pareto-line { fill: none; stroke: #d78a36; stroke-width: 3; }
+.chart-axis { stroke: var(--muted); stroke-width: 1; }
+.pareto-threshold { stroke: var(--muted); stroke-dasharray: 5 5; }
+.quarter-row { grid-template-columns: 140px minmax(0,1fr) 60px; }
+@media(max-width: 500px) { .quarter-row { grid-template-columns: 110px minmax(0,1fr) 45px; } }
+.incident-analytics table { table-layout: fixed; min-width: 680px; }
+.incident-analytics th, .incident-analytics td { white-space: normal !important; overflow-wrap: anywhere; min-width: 0 !important; max-width: none !important; }
+.incident-analytics th:first-child { width: 32%; }
+#pareto-analysis th:first-child { width: 6%; }
+#pareto-analysis th:nth-child(2) { width: 52%; }
+#pareto-analysis th:nth-child(n+3) { width: 14%; }
+.full-category { margin-top: 8px; }
+.full-category summary { color: var(--accent); cursor: pointer; font-size: 12px; }
+.full-category p { white-space: pre-wrap; overflow-wrap: anywhere; }

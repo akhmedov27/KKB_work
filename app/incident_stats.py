@@ -1,9 +1,11 @@
 """Deterministic incident statistics. No model calls or inferred classifications."""
 from datetime import date
+from typing import Annotated, Literal
 from decimal import Decimal, ROUND_HALF_UP
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 from sqlalchemy import distinct, func, select
 from app.models import IncidentRecord
+from app.department_aliases import selected_departments
 
 DIMENSIONS = {'department': 'Отделение', 'department_type': 'Тип отделения', 'group_name': 'Группа',
               'subgroup': 'Подгруппа', 'event_name': 'Вид события', 'importance': 'Важность', 'status': 'Статус',
@@ -17,6 +19,11 @@ class Filters(BaseModel):
     compare_from: date | None = None
     compare_to: date | None = None
     department: str = Field(default='', max_length=500)
+    departments: list[Annotated[str, StringConstraints(max_length=500)]] = Field(default_factory=list, max_length=50)
+    exclude_statuses: list[Annotated[str, StringConstraints(max_length=500)]] = Field(default_factory=list, max_length=50)
+    pareto_by: Literal['group_name', 'event_name', 'root_cause'] = 'event_name'
+    pareto_cutoff: int = Field(default=80, ge=1, le=100)
+    min_repeat: int = Field(default=2, ge=2, le=20000)
     group_name: str = Field(default='', max_length=500)
     subgroup: str = Field(default='', max_length=500)
     event_name: str = Field(default='', max_length=5000)
@@ -24,6 +31,17 @@ class Filters(BaseModel):
     status: str = Field(default='', max_length=500)
     number: str = Field(default='', max_length=64)
     page: int = Field(default=1, ge=1, le=1000000)
+
+    @field_validator('departments', 'exclude_statuses')
+    @classmethod
+    def clean_list(cls, values):
+        result, seen = [], set()
+        for value in values:
+            value = value.strip()
+            if value and value.casefold() not in seen:
+                result.append(value)
+                seen.add(value.casefold())
+        return result
 
     @model_validator(mode='after')
     def dates(self):
@@ -49,7 +67,12 @@ def conditions(batch_id, filters, comparison=False):
         values.append(IncidentRecord.occurred_on >= start)
     if end:
         values.append(IncidentRecord.occurred_on <= end)
-    for key in ('department', 'group_name', 'subgroup', 'event_name', 'importance', 'status'):
+    departments = selected_departments(filters)
+    if departments:
+        values.append(func.qms_casefold(IncidentRecord.department).in_(['' if item == '__empty__' else item.casefold() for item in departments]))
+    if filters.exclude_statuses:
+        values.append(func.qms_casefold(IncidentRecord.status).not_in(['' if item == '__empty__' else item.casefold() for item in filters.exclude_statuses]))
+    for key in ('group_name', 'subgroup', 'event_name', 'importance', 'status'):
         selected = getattr(filters, key).strip()
         if selected:
             field = getattr(IncidentRecord, key)
@@ -86,8 +109,10 @@ def statistics(db, batch_id, filters):
     repeated = db.execute(select(func.min(IncidentRecord.department), func.min(IncidentRecord.event_name), func.count(),
         func.min(IncidentRecord.occurred_on), func.max(IncidentRecord.occurred_on)).where(*where, IncidentRecord.event_name != '')
         .group_by(func.qms_casefold(IncidentRecord.department), func.qms_casefold(IncidentRecord.event_name))
-        .having(func.count() > 1).order_by(func.count().desc(), func.min(IncidentRecord.department), func.min(IncidentRecord.event_name))).all()
-    return {'repeated': repeated, 'total': total, 'unique': unique, 'minimum': minimum, 'maximum': maximum, 'groups': distributions,
+        .having(func.count() >= filters.min_repeat).order_by(func.count().desc(), func.min(IncidentRecord.department), func.min(IncidentRecord.event_name))).all()
+    from app.incident_analytics import advanced_statistics
+    advanced = advanced_statistics(db, batch_id, filters, distributions, months, total, where)
+    return {**advanced, 'repeated': repeated, 'total': total, 'unique': unique, 'minimum': minimum, 'maximum': maximum, 'groups': distributions,
             'months': months, 'comparison': comparison, 'month_max': max([m['count'] for m in months], default=0)}
 
 
