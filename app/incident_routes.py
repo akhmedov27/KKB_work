@@ -19,6 +19,7 @@ from app.incident_export import statistics_export, validation_export
 from app.models import IncidentBatch, IncidentRecord, IncidentStagedRow, IncidentUpload
 from app.storage import save_upload
 from app.department_aliases import selected_departments, suggestions
+from app.incident_comparison import compare, export_comparison, ComparisonProblem, KINDS
 
 
 def make_router(sessions, settings, render, logger):
@@ -73,6 +74,46 @@ def make_router(sessions, settings, render, logger):
                     export_url='/incidents/export.xlsx?' + urlencode(args, doseq=True),
                     previous_url=url(filters.page-1) if filters.page > 1 else None,
                     next_url=url(filters.page+1) if filters.page*50 < stats['total'] else None)
+
+    def comparison_result(db, before_id, after_id):
+        before, after = db.get(IncidentBatch, before_id), db.get(IncidentBatch, after_id)
+        if before is None or after is None:
+            raise HTTPException(404, 'Набор не найден.')
+        try:
+            return before, after, compare(db, before, after)
+        except ComparisonProblem as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    @router.get('/incidents/compare')
+    def compare_page(request: Request, before_id: int | None = Query(None, ge=1),
+                     after_id: int | None = Query(None, ge=1), kind: str = Query('changed', pattern='^(added|missing|changed|unchanged)$'),
+                     page_number: int = Query(1, ge=1, le=1000000)):
+        with sessions() as db:
+            batches = db.scalars(select(IncidentBatch).where(IncidentBatch.state == 'confirmed')
+                                 .order_by(IncidentBatch.confirmed_at.desc(), IncidentBatch.id.desc())).all()
+            uploads = {item.id: db.get(IncidentUpload, item.upload_id).original_name for item in batches}
+            result, before, after = None, None, None
+            if before_id is not None and after_id is not None:
+                before, after, result = comparison_result(db, before_id, after_id)
+            elif before_id is not None or after_id is not None:
+                raise HTTPException(400, 'Выберите исходный и новый наборы.')
+        def link(target_kind, number):
+            return '/incidents/compare?' + urlencode({'before_id': before_id, 'after_id': after_id, 'kind': target_kind, 'page_number': number})
+        count = result['counts'][kind] if result else 0
+        return page(request, 'incident_comparison.html', batches=batches, uploads=uploads, result=result,
+                    before=before, after=after, kinds=KINDS, kind=kind, page_number=page_number,
+                    items=result['groups'][kind][(page_number-1)*50:page_number*50] if result else [],
+                    links={key: link(key, 1) for key in KINDS},
+                    previous_url=link(kind, page_number-1) if page_number > 1 else None,
+                    next_url=link(kind, page_number+1) if page_number*50 < count else None)
+
+    @router.get('/incidents/compare.xlsx')
+    def compare_export(before_id: int = Query(..., ge=1), after_id: int = Query(..., ge=1)):
+        with sessions() as db:
+            before, after, result = comparison_result(db, before_id, after_id)
+            content = export_comparison(result, before, after)
+        return Response(content, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        headers={'Content-Disposition': 'attachment; filename="incident_comparison.xlsx"'})
 
     @router.get('/incidents/departments')
     def department_search(batch_id: int, q: str = Query('', max_length=500)):
