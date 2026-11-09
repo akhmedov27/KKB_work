@@ -71,14 +71,15 @@ if (upload) upload.addEventListener('submit', async e => {
     result.classList.add('error'); return;
   }
   button.disabled = true; button.textContent = 'Загрузка…';
-  upload.setAttribute('aria-busy', 'true'); result.textContent = 'Сохраняем файл на этом компьютере…';
+  upload.setAttribute('aria-busy', 'true'); result.textContent = 'Сохраняем файл и извлекаем текст локально…';
   try {
     const response = await fetch('/uploads', {method: 'POST', body: new FormData(upload), signal: AbortSignal.timeout(60000)});
     const data = await response.json(); result.textContent = response.ok ? data.message : data.detail;
-    result.classList.toggle('error', !response.ok);
+    result.classList.toggle('error', !response.ok || data.status === 'error');
     if (response.ok) {
       upload.reset();
       const link = document.createElement('a'); link.href = location.pathname; link.textContent = ' Обновить список'; result.append(link);
+      const detail = document.createElement('a'); detail.href = data.url; detail.textContent = ' Открыть документ →'; result.append(detail);
     }
   } catch {
     result.textContent = 'Не удалось подтвердить загрузку. Обновите список перед повторной отправкой.';
@@ -94,6 +95,26 @@ if (newConversation) {
   newConversation.addEventListener('submit', e => {
     if (!title.value.trim()) {
       e.preventDefault(); title.setCustomValidity('Введите название диалога.'); title.reportValidity();
+    }
+  });
+}
+
+for (const form of document.querySelectorAll('.extract-form')) {
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const button = form.querySelector('button'), result = form.querySelector('.extract-result');
+    const label = button.textContent;
+    button.disabled = true; button.textContent = 'Обработка…'; form.setAttribute('aria-busy', 'true');
+    result.textContent = 'Извлекаем текст локально. Это может занять до 20 секунд.';
+    try {
+      const response = await fetch(form.action, {method: 'POST', signal: AbortSignal.timeout(60000)});
+      const data = await response.json();
+      if (response.ok) { location.reload(); return; }
+      result.textContent = data.detail;
+    } catch {
+      result.textContent = 'Не удалось подтвердить обработку. Обновите страницу перед повторной попыткой.';
+    } finally {
+      button.disabled = false; button.textContent = label; form.setAttribute('aria-busy', 'false');
     }
   });
 }

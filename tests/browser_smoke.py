@@ -2,6 +2,26 @@
 import os
 from playwright.sync_api import sync_playwright, expect
 
+def synthetic_pdf():
+    # A valid one-page PDF built without optional document dependencies.
+    stream = b'BT /F1 12 Tf 72 720 Td (Synthetic QMS-004 quality text) Tj ET'
+    objects = [b'<< /Type /Catalog /Pages 2 0 R >>',
+               b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+               b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+               b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+               b'<< /Length ' + str(len(stream)).encode() + b' >>\nstream\n' + stream + b'\nendstream']
+    result = b'%PDF-1.4\n'
+    offsets = []
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(result))
+        result += str(index).encode() + b' 0 obj\n' + obj + b'\nendobj\n'
+    start = len(result)
+    result += b'xref\n0 6\n0000000000 65535 f \n'
+    result += b''.join(f'{offset:010d} 00000 n \n'.encode() for offset in offsets)
+    result += b'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + str(start).encode() + b'\n%%EOF'
+    return result
+
+
 url = os.environ.get('QMS_TEST_URL', 'http://127.0.0.1:8002')
 with sync_playwright() as p:
     options = {'headless': True}
@@ -48,9 +68,14 @@ with sync_playwright() as p:
     page.locator('#file').set_input_files({'name': 'bad.txt', 'mimeType': 'text/plain', 'buffer': b'synthetic'})
     page.get_by_role('button', name='Загрузить локально').click()
     expect(page.locator('#upload-result')).to_contain_text('Выберите непустой')
-    page.locator('#file').set_input_files({'name': 'test-qms002.pdf', 'mimeType': 'application/pdf', 'buffer': b'synthetic'})
+    page.locator('#file').set_input_files({'name': 'test-qms002.pdf', 'mimeType': 'application/pdf', 'buffer': synthetic_pdf()})
     page.get_by_role('button', name='Загрузить локально').click()
-    page.get_by_role('link', name='Обновить список').click()
+    page.get_by_role('link', name='Открыть документ').click()
+    expect(page.locator('.extracted-text')).to_contain_text('Synthetic QMS-004 quality text')
+    with page.expect_navigation():
+        page.get_by_role('button', name='Повторить извлечение').click()
+    expect(page.locator('.extracted-text')).to_contain_text('Synthetic QMS-004 quality text')
+    page.get_by_role('link', name='К списку документов').click()
     expect(page.locator('tbody')).to_contain_text('test-qms002.pdf')
     page.set_viewport_size({'width': 390, 'height': 844})
     expect(page.locator('#sidebar-nav')).to_be_hidden()
@@ -77,4 +102,4 @@ with sync_playwright() as p:
     page.locator('#theme').click()
     expect(page.locator('html')).to_have_attribute('data-theme', 'dark')
     browser.close()
-print('UI checks passed: navigation, theme, chat/error, uploads, mobile menu, 404, restricted storage, separate conversations')
+print('UI checks passed: navigation, theme, chat/error, uploads, mobile menu, 404, restricted storage, separate conversations, PDF text preview/reprocessing')

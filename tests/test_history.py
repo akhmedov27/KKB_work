@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.config import Settings
-from app.database import build_engine
+from app.database import SCHEMA_VERSION, build_engine
 from app.main import create_app
 from app.models import ChatMessage, Conversation
 
@@ -127,7 +127,7 @@ def test_upgrade_preserves_history_documents_and_backup(tmp_path):
         assert 'Новый запрос' in client.get('/').text
     assert len(list((tmp_path / 'backups').glob('*.sqlite3'))) == 1
     with closing(sqlite3.connect(tmp_path / 'qms.sqlite3')) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert db.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
         assert db.execute('SELECT COUNT(*) FROM conversations').fetchone()[0] == 1
         assert db.execute('SELECT COUNT(*) FROM chat_messages').fetchone()[0] == 3

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from app.models import Base
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def build_engine(path: Path) -> Engine:
@@ -35,15 +35,20 @@ def initialize_database(engine: Engine, path: Path):
                 connection.commit()
                 return
             tables = set(connection.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'").scalars())
-            legacy = 'chat_messages' in tables
+            legacy = version == 0 and 'chat_messages' in tables
             if legacy:
                 columns = {row[1] for row in connection.exec_driver_sql('PRAGMA table_info(chat_messages)')}
                 if columns != {'id', 'role', 'content', 'created_at'} or 'conversations' in tables:
                     raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
+            if version == 0 and tables and not legacy:
+                raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
+            if version == 1 and not {'chat_messages', 'conversations', 'documents'}.issubset(tables):
+                raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
+            if tables:
                 backup_dir = path.parent / 'backups'
                 backup_dir.mkdir(exist_ok=True)
                 stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-                backup = backup_dir / f'qms-before-v1-{stamp}-{uuid4().hex[:8]}.sqlite3'
+                backup = backup_dir / f'qms-before-v{SCHEMA_VERSION}-{stamp}-{uuid4().hex[:8]}.sqlite3'
                 # BEGIN IMMEDIATE prevents other writers. A separate reader can
                 # safely snapshot the committed old schema using SQLite backup.
                 with closing(sqlite3.connect(path)) as source, closing(sqlite3.connect(backup)) as destination:
@@ -65,7 +70,7 @@ def initialize_database(engine: Engine, path: Path):
                     'SELECT id, ?, role, content, created_at FROM chat_messages_legacy', (conversation_id,),
                 )
                 connection.exec_driver_sql('DROP TABLE chat_messages_legacy')
-            else:
+            elif version == 0:
                 connection.exec_driver_sql(
                     'INSERT INTO conversations(title, created_at, updated_at) VALUES (?, ?, ?)',
                     ('Первый диалог', datetime.now(timezone.utc).isoformat(sep=" "), datetime.now(timezone.utc).isoformat(sep=" ")),

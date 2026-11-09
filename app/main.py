@@ -10,21 +10,24 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import Settings
-from app.models import ChatMessage, Conversation, Document
+from app.models import ChatMessage, Conversation, Document, DocumentExtraction
 from app.database import SCHEMA_VERSION, build_engine, initialize_database
 from app.history import latest_conversation, list_conversations, message_page, save_exchange
 from app.providers import ProviderUnavailable, get_provider
 from app.storage import save_upload
+from app.documents import process_document
+from app.extraction import ProcessingBusy, STATUS_LABELS
 
 ROOT = Path(__file__).parent
 MODULES = {"knowledge": "База знаний", "documents": "Документы", "incidents": "Инциденты", "risks": "Риски", "audits": "Внутренние аудиты", "reports": "Отчётность", "settings": "Настройки"}
 
 
 MODULE_INFO = {
-    "knowledge": ("Локальное хранилище документов СМК.", "Доступна загрузка. Извлечение текста, классификация и поиск пока не реализованы."),
+    "knowledge": ("Локальное хранилище документов СМК.", "Доступны загрузка и локальное извлечение текста. Классификация, поиск и ответы по документам пока не реализованы."),
     "documents": ("Рабочее пространство для документов СМК.", "Анализ структуры, сравнение версий и создание Word и Excel пока не реализованы."),
     "incidents": ("Данные об инцидентах и их анализ.", "Импорт Excel, расчёт показателей и анализ динамики пока не реализованы."),
     "risks": ("Оценка и управление рисками процессов.", "Реестр рисков, расчёт ранга и контроль мероприятий пока не реализованы."),
@@ -66,7 +69,7 @@ def create_app(settings: Settings | None = None):
     templates = Jinja2Templates(directory=ROOT / "templates")
 
     def render(request, template, **context):
-        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, **context})
+        return templates.TemplateResponse(request=request, name=template, context={"modules": MODULES, "settings": settings, "extraction_labels": STATUS_LABELS, **context})
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request, exc):
@@ -125,8 +128,10 @@ def create_app(settings: Settings | None = None):
         if module not in MODULES:
             raise HTTPException(404)
         with sessions() as db:
-            documents = db.scalars(select(Document).order_by(Document.id.desc()).limit(100)).all()
-        return render(request, "module.html", active=module, title=MODULES[module], documents=documents, description=MODULE_INFO[module][0], limitation=MODULE_INFO[module][1])
+            rows = db.execute(select(Document, DocumentExtraction.status).outerjoin(DocumentExtraction).order_by(Document.id.desc()).limit(100)).all()
+            documents = [row[0] for row in rows]
+            extraction_statuses = {row[0].id: row[1] for row in rows}
+        return render(request, "module.html", active=module, title=MODULES[module], documents=documents, extraction_statuses=extraction_statuses, description=MODULE_INFO[module][0], limitation=MODULE_INFO[module][1])
 
     @app.post("/chat", response_class=HTMLResponse)
     def chat(request: Request, message: str = Form(..., min_length=1, max_length=4000),
@@ -149,19 +154,49 @@ def create_app(settings: Settings | None = None):
         logger.info("Сообщения чата сохранены; диалог=%d", selected_id)
         return response
 
+    @app.get("/documents/{document_id}", response_class=HTMLResponse)
+    def document_detail(request: Request, document_id: int):
+        with sessions() as db:
+            document = db.get(Document, document_id)
+            if document is None:
+                raise HTTPException(404, "Документ не найден.")
+            extraction = db.get(DocumentExtraction, document_id)
+        return render(request, "document.html", active="knowledge", title="Просмотр документа", document=document, extraction=extraction)
+
+    @app.post("/documents/{document_id}/extract")
+    def extract_document(document_id: int):
+        try:
+            result = process_document(document_id, sessions, data / "uploads")
+        except LookupError as exc:
+            raise HTTPException(404, "Документ не найден.") from exc
+        except ProcessingBusy as exc:
+            raise HTTPException(409, str(exc)) from exc
+        logger.info("Извлечение текста; документ=%d; статус=%s", document_id, result.status)
+        return {"status": result.status, "message": result.notice}
+
     @app.post("/uploads")
     async def upload(file: UploadFile = File(...)):
         name, stored, size = await save_upload(file, data / "uploads", settings.max_upload_mb * 1024 * 1024)
         try:
-            with sessions() as db:
-                doc = Document(original_name=name, stored_name=stored, size=size)
-                db.add(doc)
-                db.commit()
+            def register():
+                with sessions.begin() as db:
+                    doc = Document(original_name=name, stored_name=stored, size=size)
+                    db.add(doc)
+                    db.flush()
+                    return doc.id
+            document_id = await run_in_threadpool(register)
         except Exception:
             (data / "uploads" / stored).unlink(missing_ok=True)
             raise
-        logger.info("Файл сохранён локально; размер=%d", size)
-        return {"message": "Файл сохранён локально. Содержимое не обрабатывалось.", "name": name, "size": size}
+        logger.info("Файл сохранён локально; документ=%d; размер=%d", document_id, size)
+        try:
+            result = await run_in_threadpool(process_document, document_id, sessions, data / "uploads")
+            status, notice = result.status, result.notice
+        except ProcessingBusy as exc:
+            status, notice = "unprocessed", str(exc)
+        logger.info("Извлечение текста; документ=%d; статус=%s", document_id, status)
+        return {"message": "Файл сохранён локально. " + notice, "name": name, "size": size,
+                "id": document_id, "status": status, "url": f"/documents/{document_id}"}
 
     return app
 

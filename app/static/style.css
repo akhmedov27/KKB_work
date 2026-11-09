@@ -50,3 +50,8 @@ input[type=file] { max-width: 100%; color: var(--text); }
 .conversation-list { display: grid; max-height: 320px; overflow-y: auto; margin: 16px 0; gap: 4px; }
 .conversation-list a { display: block; padding: 10px; border-radius: 7px; overflow-wrap: anywhere; }
 .conversation-list a.selected, .conversation-list a:hover { background: var(--soft); }
+.document-detail { margin: 20px 0; }
+.document-detail h2 { margin-top: 16px; }
+.document-name { overflow-wrap: anywhere; }
+.extract-form { margin: 18px 0; }
+.extracted-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font: 14px/1.8 'Segoe UI', Arial, sans-serif; }

@@ -49,7 +49,7 @@
       <small>Последние активные диалоги — первыми. Для обновления порядка обновите страницу.</small>
     </section>
     <section class="panel"><h2>Быстрый доступ</h2><a class="quick" href="/modules/knowledge">▤ База знаний <span>↗</span></a><a class="quick" href="/modules/documents">▧ Документы <span>↗</span></a><a class="quick" href="/modules/audits">☑ Внутренние аудиты <span>↗</span></a><small>Модули пока доступны как заглушки.</small></section>
-    <section class="panel"><h2>Последние документы</h2>{% for doc in documents %}<div class="document">{{ doc.original_name }}<small>{{ doc.size }} байт · {{ doc.created_at.strftime('%d.%m.%Y') }}</small></div>{% else %}<p class="muted">Пока нет загруженных файлов.</p>{% endfor %}<a href="/modules/knowledge">Перейти к загрузке →</a></section>
+    <section class="panel"><h2>Последние документы</h2>{% for doc in documents %}<div class="document"><a href="/documents/{{ doc.id }}">{{ doc.original_name }}</a><small>{{ doc.size }} байт · {{ doc.created_at.strftime('%d.%m.%Y') }}</small></div>{% else %}<p class="muted">Пока нет загруженных файлов.</p>{% endfor %}<a href="/modules/knowledge">Перейти к загрузке →</a></section>
     <section class="notice"><strong>Локальный режим</strong><p>Файлы и переписка остаются на этом компьютере. Облачный ИИ не подключён.</p></section>
   </div>
 </div>

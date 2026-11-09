@@ -41,3 +41,13 @@ class Document(Base):
     stored_name: Mapped[str] = mapped_column(String(50), unique=True)
     size: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+
+class DocumentExtraction(Base):
+    __tablename__ = "document_extractions"
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="RESTRICT"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20))
+    text: Mapped[str] = mapped_column(Text, default="")
+    notice: Mapped[str] = mapped_column(Text, default="")
+    processed_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    __table_args__ = (CheckConstraint("status IN ('ready', 'empty', 'error')", name="ck_extraction_status"),)

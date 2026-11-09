@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="eyebrow">ЛОКАЛЬНОЕ ХРАНИЛИЩЕ</div>
+<h1 class="document-name">{{ document.original_name }}</h1>
+<p class="subtitle">{{ '%.1f'|format(document.size / 1024) }} КиБ · Загружен {{ document.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</p>
+<a class="back-link" href="/modules/knowledge">← К списку документов</a>
+<section class="panel document-detail">
+  <span class="badge">{{ extraction_labels[extraction.status] if extraction else 'Не обработан' }}</span>
+  <h2>Извлечённый текст</h2>
+  {% if extraction %}<p class="{{ 'error' if extraction.status == 'error' else 'muted' }}">{{ extraction.notice }}</p><small>Обработан {{ extraction.processed_at.strftime('%d.%m.%Y %H:%M') }} UTC</small>
+  {% else %}<p>Этот файл ещё не обрабатывался. Нажмите кнопку ниже, чтобы извлечь текст локально.</p>{% endif %}
+  <form class="extract-form" action="/documents/{{ document.id }}/extract" method="post">
+    <button type="submit">{{ 'Повторить извлечение' if extraction else 'Извлечь текст' }}</button>
+    <p class="extract-result" role="status" aria-live="polite"></p>
+  </form>
+  {% if extraction and extraction.status == 'ready' %}<pre class="extracted-text" tabindex="0" aria-label="Текст документа">{{ extraction.text }}</pre>{% endif %}
+</section>
+<section class="notice"><strong>Границы обработки</strong><p>Сохраняется только текст, без исходного оформления. DOCX: основной текст и таблицы; XLSX: значения ячеек и сохранённые результаты формул; PDF: доступный текстовый слой с номерами страниц. OCR, выполнение макросов и формул, переходы по ссылкам и передача файлов в интернет не выполняются. Извлечение текста не является анализом документа.</p></section>
+{% endblock %}
