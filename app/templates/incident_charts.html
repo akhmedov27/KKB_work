@@ -1,0 +1,12 @@
+<section class="panel document-detail incident-visuals" id="incident-visuals">
+<h2>Графики инцидентов</h2>
+<p>Количество зарегистрированных записей не равно уровню риска. Для частот нужны данные о госпитализациях или койко-днях.</p>
+<div class="visual-controls"><div><label for="visual-type">График</label><select id="visual-type">{% for chart in charts.charts %}<option value="{{ chart.id }}" {{ 'selected' if chart.id == 'departments' }}>{{ chart.title }}</option>{% endfor %}</select></div>
+<div id="visual-mode-wrap" hidden><label for="visual-mode">Шкала</label><select id="visual-mode"><option value="count">Количество</option><option value="percent">Доли, %</option></select></div>
+<button id="visual-png" type="button" disabled>Сохранить PNG</button></div>
+<p id="visual-note" class="muted"></p><p class="muted">Наведите указатель для точного значения. Нажатие на элемент со ссылкой открывает соответствующие записи. С клавиатуры — Tab и Enter.</p>
+<div id="visual-canvas" class="table-scroll"></div><p id="visual-feedback" role="status" aria-live="polite"></p>
+<details><summary>Данные выбранного графика</summary><div id="visual-table" class="table-scroll"></div></details>
+<noscript><p>Для интерактивных графиков включите JavaScript. Основные таблицы статистики доступны ниже.</p></noscript>
+<script id="incident-chart-data" type="application/json">{{ charts|tojson }}</script>
+</section>

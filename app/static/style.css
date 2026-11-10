@@ -117,3 +117,13 @@ input[type=file] { max-width: 100%; color: var(--text); }
 .full-category { margin-top: 8px; }
 .full-category summary { color: var(--accent); cursor: pointer; font-size: 12px; }
 .full-category p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.incident-visuals { min-width: 0; }
+.visual-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 12px; }
+.visual-controls > div { flex: 1 1 240px; min-width: 0; }
+.visual-controls select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
+#visual-canvas { border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+#visual-canvas svg { display: block; min-width: 900px; width: 100%; height: auto; }
+#visual-canvas a:hover rect, #visual-canvas a:focus rect { stroke: #172e48; stroke-width: 2; }
+#visual-canvas a { cursor: pointer; }
+#visual-table td { white-space: normal; overflow-wrap: anywhere; }
+.visual-controls [hidden] { display: none; }

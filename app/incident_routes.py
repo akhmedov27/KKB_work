@@ -19,6 +19,7 @@ from app.incident_export import statistics_export, validation_export
 from app.models import IncidentBatch, IncidentRecord, IncidentStagedRow, IncidentUpload
 from app.storage import save_upload
 from app.department_aliases import selected_departments, suggestions
+from app.incident_charts import chart_data, snapshot_chart
 from app.incident_comparison import compare, export_comparison, ComparisonProblem, KINDS
 
 
@@ -62,15 +63,16 @@ def make_router(sessions, settings, render, logger):
             upload = db.get(IncidentUpload, batch.upload_id)
             stats = statistics(db, batch.id, filters)
             rows = register_rows(db, batch.id, filters)
+            charts = chart_data(db, batch.id, filters, stats)
             options = {}
-            for key in ('department', 'group_name', 'subgroup', 'event_name', 'importance', 'status'):
+            for key in ('department', 'group_name', 'subgroup', 'event_name', 'importance', 'status', 'root_cause'):
                 field = getattr(IncidentRecord, key)
                 options[key] = db.scalars(select(field).where(IncidentRecord.batch_id == batch.id).distinct().order_by(field).limit(500)).all()
         args = {key: value for key, value in filters.model_dump(mode='json').items() if value is not None and value != '' and value != []}
         def url(page_number):
             return '/modules/incidents?' + urlencode({**args, 'page': page_number}, doseq=True)
         return page(request, 'incidents.html', batch=batch, batches=batches, upload=upload, summary=json.loads(batch.summary_json),
-                    stats=stats, rows=rows, filters=filters, options=options,
+                    stats=stats, rows=rows, filters=filters, options=options, charts=charts,
                     export_url='/incidents/export.xlsx?' + urlencode(args, doseq=True),
                     previous_url=url(filters.page-1) if filters.page > 1 else None,
                     next_url=url(filters.page+1) if filters.page*50 < stats['total'] else None)
@@ -102,6 +104,7 @@ def make_router(sessions, settings, render, logger):
         count = result['counts'][kind] if result else 0
         return page(request, 'incident_comparison.html', batches=batches, uploads=uploads, result=result,
                     before=before, after=after, kinds=KINDS, kind=kind, page_number=page_number,
+                    charts=snapshot_chart(result, before.id, after.id) if result else None,
                     items=result['groups'][kind][(page_number-1)*50:page_number*50] if result else [],
                     links={key: link(key, 1) for key in KINDS},
                     previous_url=link(kind, page_number-1) if page_number > 1 else None,

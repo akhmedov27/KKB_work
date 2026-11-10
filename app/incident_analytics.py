@@ -16,7 +16,7 @@ def comparison_table(db, batch_id, filters, current_groups, field_name):
     for key in current.keys() | before.keys():
         label = current.get(key, before.get(key))[0]
         first, second = current.get(key, ('', 0))[1], before.get(key, ('', 0))[1]
-        rows.append({'label': label, 'current': first, 'previous': second, 'delta': first-second,
+        rows.append({'value': key, 'label': label, 'current': first, 'previous': second, 'delta': first-second,
                      'percent': percent(first-second, second) if second else None})
     return sorted(rows, key=lambda row: (-abs(row['delta']), row['label'].casefold()))
 

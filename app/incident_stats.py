@@ -27,6 +27,7 @@ class Filters(BaseModel):
     group_name: str = Field(default='', max_length=500)
     subgroup: str = Field(default='', max_length=500)
     event_name: str = Field(default='', max_length=5000)
+    root_cause: str = Field(default='', max_length=5000)
     importance: str = Field(default='', max_length=500)
     status: str = Field(default='', max_length=500)
     number: str = Field(default='', max_length=64)
@@ -72,7 +73,7 @@ def conditions(batch_id, filters, comparison=False):
         values.append(func.qms_casefold(IncidentRecord.department).in_(['' if item == '__empty__' else item.casefold() for item in departments]))
     if filters.exclude_statuses:
         values.append(func.qms_casefold(IncidentRecord.status).not_in(['' if item == '__empty__' else item.casefold() for item in filters.exclude_statuses]))
-    for key in ('group_name', 'subgroup', 'event_name', 'importance', 'status'):
+    for key in ('group_name', 'subgroup', 'event_name', 'importance', 'status', 'root_cause'):
         selected = getattr(filters, key).strip()
         if selected:
             field = getattr(IncidentRecord, key)
