@@ -134,3 +134,13 @@ input[type=date] { color-scheme: inherit; color: var(--text); background-color: 
 input[type=date]::-webkit-calendar-picker-indicator { opacity: 1; cursor: pointer; padding: 5px; }
 input[type=date]:focus-visible { outline: 3px solid #70b9b0; outline-offset: 2px; }
 #report-comment, #period-report-export { overflow-wrap: anywhere; }
+.stu-toolbar { position: sticky; top: 0; z-index: 3; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.stu-section { margin-top: 16px; min-width: 0; }
+.stu-row { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.stu-controls { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+#stu-form input:not([type=checkbox]), #stu-form select { max-width: 100%; padding: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 6px; }
+#stu-form .metadata-grid input, #stu-form .metadata-grid select { width: 100%; }
+#stu-form .table-scroll { max-width: 100%; }
+#stu-form td input:not([type=checkbox]) { min-width: 180px; }
+#stu-errors { color: var(--text); overflow-wrap: anywhere; }
+#stu-status { overflow-wrap: anywhere; }

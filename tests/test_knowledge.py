@@ -14,7 +14,7 @@ from docx import Document as WordDocument
 
 from app.config import Settings
 from app.database import SCHEMA_VERSION, build_engine
-from app.main import create_app
+from legacy_app import create_app
 from app.models import Base, Document, DocumentExtraction, DocumentMetadata
 from app.search import excerpt, literal_position, text_parts
 

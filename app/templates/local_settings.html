@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>Настройки</h1><section class="panel"><h2>Локальное хранение</h2><p>Каталог данных: {{ settings.data_dir }}</p><p>Лимит загрузки Excel: {{ settings.max_upload_mb }} МиБ</p><p>Оформление меняется кнопкой темы в боковом меню. Резервную копию всего каталога данных создавайте при остановленном сервере.</p></section>{% endblock %}

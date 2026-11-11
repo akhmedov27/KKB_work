@@ -132,3 +132,13 @@ class IncidentRecord(Base):
     source_method: Mapped[str] = mapped_column(String(500))
     root_cause: Mapped[str] = mapped_column(Text)
     __table_args__ = (Index('ix_incidents_batch_date', 'batch_id', 'occurred_on'), UniqueConstraint('batch_id', 'source_row', name='uq_incident_source_row'))
+
+
+class StuDraft(Base):
+    __tablename__ = 'stu_drafts'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(500), default='Новый СТУ')
+    payload_json: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now)

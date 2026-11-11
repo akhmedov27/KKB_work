@@ -190,12 +190,15 @@ def test_invalid_file_not_registered(local):
 
 def test_v4_upgrade_preserves_existing_data(tmp_path):
     app=create_app(Settings(data_dir=tmp_path,_env_file=None))
-    with TestClient(app) as client:client.post('/chat',data={'message':'До статистики'})
+    with TestClient(app):pass
+    with closing(sqlite3.connect(tmp_path/'qms.sqlite3')) as db:
+        db.execute("INSERT INTO chat_messages(conversation_id,role,content,created_at,provider,model) VALUES (1,'user','До статистики','2026-01-01','mock','')");db.commit()
     with closing(sqlite3.connect(tmp_path/'qms.sqlite3')) as db:
         for table in ['incident_records','incident_staged_rows','incident_batches','incident_uploads']:db.execute('DROP TABLE '+table)
         db.execute('PRAGMA user_version=4');db.commit()
     with TestClient(create_app(Settings(data_dir=tmp_path,_env_file=None))) as client:
-        assert 'До статистики' in client.get('/').text
+        with closing(sqlite3.connect(tmp_path/'qms.sqlite3')) as db:
+            assert db.execute("SELECT content FROM chat_messages WHERE content='До статистики'").fetchone()==('До статистики',)
         assert client.get('/modules/incidents').status_code==200
     assert len(list((tmp_path/'backups').glob(f'qms-before-v{SCHEMA_VERSION}-*.sqlite3')))==1
 

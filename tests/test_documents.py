@@ -15,7 +15,7 @@ from app.config import Settings
 from app.database import SCHEMA_VERSION, build_engine
 from app.extraction import ExtractionResult, extract_local
 from app.extract_worker import extract
-from app.main import create_app
+from legacy_app import create_app
 from app.models import Document, DocumentExtraction
 
 

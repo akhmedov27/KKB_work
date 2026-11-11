@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from app.models import Base
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def build_engine(path: Path) -> Engine:
@@ -52,6 +52,8 @@ def initialize_database(engine: Engine, path: Path):
             if version == 3 and not {'chat_messages', 'conversations', 'documents', 'document_extractions', 'document_metadata'}.issubset(tables):
                 raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
             if version == 4 and not {'chat_messages', 'conversations', 'documents', 'document_extractions', 'document_metadata'}.issubset(tables):
+                raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
+            if version == 5 and not {'incident_batches', 'incident_records', 'documents', 'chat_messages'}.issubset(tables):
                 raise RuntimeError('Неизвестная схема базы данных. Автоматическое обновление остановлено.')
             if tables:
                 backup_dir = path.parent / 'backups'

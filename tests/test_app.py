@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from app.config import Settings
-from app.main import create_app
+from legacy_app import create_app
 from app.models import ChatMessage, Document
 
 

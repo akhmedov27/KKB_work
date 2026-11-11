@@ -25,18 +25,18 @@
       <a href="/" {% if active == 'home' %}class="active" aria-current="page"{% endif %}><span aria-hidden="true">⌂</span> Главная</a>
       {% for key, label in modules.items() %}
       <a href="/modules/{{ key }}" {% if active == key %}class="active" aria-current="page"{% endif %}>
-        <span class="nav-icon" aria-hidden="true">{{ ['▤','▧','◇','△','☑','▥','⚙'][loop.index0] }}</span>{{ label }}
+        <span class="nav-icon" aria-hidden="true">{{ {'knowledge':'▤','documents':'▧','incidents':'◇','risks':'△','audits':'☑','reports':'▥','settings':'⚙','stu':'▤'}[key] }}</span>{{ label }}
       </a>
       {% endfor %}
     </nav>
   </div>
-  <div class="sidebar-bottom"><span class="dot"></span> Локальное хранение<small>QMS-008 · {{ "Тестовый режим" if settings.ai_provider == "mock" else "ИИ-подключение" }}</small></div>
+  <div class="sidebar-bottom"><span class="dot"></span> Локальное хранение<small>QMS-008 · {{ ("Тестовый режим" if settings.ai_provider == "mock" else "ИИ-подключение") if legacy_mode else "Локальный режим" }}</small></div>
   <button id="theme" type="button" aria-pressed="false">Тёмная тема</button>
 </aside>
 <main id="main-content" tabindex="-1">
   <header>
     <div class="breadcrumbs" aria-label="Вы находитесь здесь"><a href="/">Рабочее пространство</a><span aria-hidden="true"> / </span><span>{{ title }}</span></div>
-    <span class="badge">{{ "Без внешних подключений" if settings.ai_provider == "mock" else "Локальный сервер ИИ" if settings.ai_provider == "local" else cloud_label + " · запросы по разрешению" if settings.cloud_enabled else cloud_label + " · облако выключено" }}</span>
+    <span class="badge">{% if legacy_mode %}{{ "Без внешних подключений" if settings.ai_provider == "mock" else "Локальный сервер ИИ" if settings.ai_provider == "local" else cloud_label + " · запросы по разрешению" if settings.cloud_enabled else cloud_label + " · облако выключено" }}{% else %}Локальные расчёты · без ИИ{% endif %}</span>
   </header>
   <div class="content">{% block content %}{% endblock %}</div>
   <footer>QMS Assistant KKB · Только синтетические данные. Не загружайте сведения о пациентах.</footer>

@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import Settings
 from app.database import SCHEMA_VERSION, build_engine
-from app.main import create_app
+from legacy_app import create_app
 from app.models import ChatMessage, Conversation
 
 

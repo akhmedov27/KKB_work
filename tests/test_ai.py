@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.ai_service import AIService
 from app.config import Settings
 from app.database import SCHEMA_VERSION, build_engine
-from app.main import create_app
+from legacy_app import create_app
 from app.models import ChatMessage, Conversation, Document, DocumentExtraction
 from app.providers import CloudProvider, ProviderUnavailable
 
