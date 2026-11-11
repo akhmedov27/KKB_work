@@ -127,3 +127,10 @@ input[type=file] { max-width: 100%; color: var(--text); }
 #visual-canvas a { cursor: pointer; }
 #visual-table td { white-space: normal; overflow-wrap: anywhere; }
 .visual-controls [hidden] { display: none; }
+/* Native calendar controls follow the selected theme without double inversion. */
+:root { color-scheme: light; }
+:root[data-theme=dark] { color-scheme: dark; }
+input[type=date] { color-scheme: inherit; color: var(--text); background-color: var(--bg); border: 1px solid var(--line); }
+input[type=date]::-webkit-calendar-picker-indicator { opacity: 1; cursor: pointer; padding: 5px; }
+input[type=date]:focus-visible { outline: 3px solid #70b9b0; outline-offset: 2px; }
+#report-comment, #period-report-export { overflow-wrap: anywhere; }

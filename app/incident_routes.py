@@ -19,6 +19,7 @@ from app.incident_export import statistics_export, validation_export
 from app.models import IncidentBatch, IncidentRecord, IncidentStagedRow, IncidentUpload
 from app.storage import save_upload
 from app.department_aliases import selected_departments, suggestions
+from app.incident_report import ReportPeriod, MONTHS, prepare_report, document_report
 from app.incident_charts import chart_data, snapshot_chart
 from app.incident_comparison import compare, export_comparison, ComparisonProblem, KINDS
 
@@ -31,10 +32,11 @@ def make_router(sessions, settings, render, logger):
     def page(request, template, **context):
         return render(request, template, active='incidents', title='Инциденты', dimensions=DIMENSIONS, **context)
 
-    def filters_for(request):
-        values = {key: value for key, value in request.query_params.items() if value != ''}
+    def filters_for(request, params=None):
+        params = request.query_params if params is None else params
+        values = {key: value for key, value in params.items() if value != ''}
         for key in ('departments', 'exclude_statuses'):
-            values[key] = request.query_params.getlist(key)
+            values[key] = params.getlist(key)
         try:
             filters = Filters.model_validate(values)
             filters.departments = selected_departments(filters)
@@ -73,9 +75,49 @@ def make_router(sessions, settings, render, logger):
             return '/modules/incidents?' + urlencode({**args, 'page': page_number}, doseq=True)
         return page(request, 'incidents.html', batch=batch, batches=batches, upload=upload, summary=json.loads(batch.summary_json),
                     stats=stats, rows=rows, filters=filters, options=options, charts=charts,
+                    report_url='/incidents/report?' + urlencode(args, doseq=True),
                     export_url='/incidents/export.xlsx?' + urlencode(args, doseq=True),
                     previous_url=url(filters.page-1) if filters.page > 1 else None,
                     next_url=url(filters.page+1) if filters.page*50 < stats['total'] else None)
+
+    def report_for(db, request, params):
+        filters = filters_for(request, params)
+        try:
+            period = ReportPeriod.model_validate({key: value for key, value in params.items() if key.startswith('report_') and value != ''})
+        except ValidationError:
+            raise HTTPException(400, 'Выберите месяц или квартал, год 1901–9998, месяц 1–12 и квартал 1–4.') from None
+        batch = selected_batch(db, filters)
+        if batch is None:
+            raise HTTPException(400, 'Сначала подтвердите импорт инцидентов.')
+        upload = db.get(IncidentUpload, batch.upload_id)
+        report = prepare_report(db, batch, filters, period)
+        return batch, upload, report
+
+    @router.get('/incidents/report')
+    def report_page(request: Request):
+        with sessions() as db:
+            batch, upload, report = report_for(db, request, request.query_params)
+        filters = report['filters']
+        args = {key: value for key, value in filters.model_dump(mode='json').items() if value is not None and value != '' and value != []}
+        hidden = [(key, item) for key, value in args.items() if key not in ('date_from','date_to','compare_from','compare_to','page')
+                  for item in (value if isinstance(value, list) else [value])]
+        return page(request, 'incident_report.html', batch=batch, upload=upload, report=report, months=MONTHS,
+                    report_hidden=hidden, period_hidden=report['period'].model_dump(),
+                    report_excel_url='/incidents/export.xlsx?' + urlencode(args, doseq=True))
+
+    @router.post('/incidents/report.docx')
+    async def report_docx(request: Request):
+        form = await request.form()
+        comment = form.get('comment', '')
+        if not isinstance(comment, str) or len(comment) > 12000:
+            raise HTTPException(400, 'Комментарий должен содержать не более 12 000 символов.')
+        def generate():
+            with sessions() as db:
+                batch, upload, report = report_for(db, request, form)
+                return document_report(report, batch, upload, comment)
+        content = await run_in_threadpool(generate)
+        return Response(content, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        headers={'Content-Disposition': 'attachment; filename="incident_period_report.docx"'})
 
     def comparison_result(db, before_id, after_id):
         before, after = db.get(IncidentBatch, before_id), db.get(IncidentBatch, after_id)

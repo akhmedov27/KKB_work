@@ -4,9 +4,10 @@
 <h1>{{ title }}</h1>
 <p class="subtitle">{{ description }}</p>
 <section class="panel module-intro">
-  <span class="badge">{{ 'Загрузка и извлечение текста' if active == 'knowledge' else 'Просмотр конфигурации' if active == 'settings' else 'В разработке' }}</span>
-  <h2>{{ 'Приём тестовых документов' if active == 'knowledge' else 'Параметры рабочего пространства' if active == 'settings' else 'Раздел подготовлен к следующему этапу' }}</h2>
+  <span class="badge">{{ 'Загрузка и извлечение текста' if active == 'knowledge' else 'Просмотр конфигурации' if active == 'settings' else 'Отчёт по инцидентам' if active == 'reports' else 'В разработке' }}</span>
+  <h2>{{ 'Приём тестовых документов' if active == 'knowledge' else 'Параметры рабочего пространства' if active == 'settings' else 'Периодическая аналитика' if active == 'reports' else 'Раздел подготовлен к следующему этапу' }}</h2>
   <p>{{ limitation }}</p>
+  {% if active == 'reports' %}<p><a href="/incidents/report">Открыть отчёт за месяц или квартал</a></p><p>Сначала подтвердите импорт в разделе «Инциденты». Чтобы задать отделения и статусы, откройте отчёт из нужной выборки статистики.</p>{% endif %}
   {% if active == 'settings' %}
   <dl class="settings-list">
     <div><dt>ИИ-провайдер</dt><dd>{{ settings.ai_provider }}</dd></div>
