@@ -72,7 +72,7 @@ def test_approval_dimensions_no_fill_matrix_and_body_fonts():
   assert all(r.font.name=='Arial' and r.font.size.pt==12 for r in p.runs)
  for p in d.paragraphs:
   if p.text=='1 НАЗНАЧЕНИЕ':assert all(r.font.size.pt==12 for r in p.runs)
- assert d.styles['TOC 1'].font.name=='Arial' and d.styles['TOC 1'].font.size.pt==12
+ assert d.styles['toc 1'].font.name=='Arial' and d.styles['toc 1'].font.size.pt==12
 
 
 def test_process_hidden_borders_gray_fill_and_centered_24():
@@ -92,7 +92,7 @@ def test_risk_alignment_indicators_and_appendix_soft_break():
   for j,c in enumerate(row.cells):
    assert c.vertical_alignment==WD_CELL_VERTICAL_ALIGNMENT.CENTER
    assert all(p.alignment==(WD_ALIGN_PARAGRAPH.LEFT if i>=2 and j==0 else WD_ALIGN_PARAGRAPH.CENTER) for p in c.paragraphs)
- indicators=next(t for t in d.tables if len(t.columns)==11);assert_font(indicators,7);assert_center(indicators)
+ indicators=next(t for t in d.tables if len(t.columns)==11);assert_font(indicators,10);assert_center(indicators)
  p=next(p for p in d.paragraphs if p.text.startswith('ПРИЛОЖЕНИЕ 1\n'))
  assert p.text=='ПРИЛОЖЕНИЕ 1\nОбразец с Сохранением РЕГИСТРА'
  assert p.style.name=='Heading 1' and p.alignment==WD_ALIGN_PARAGRAPH.CENTER
@@ -109,3 +109,50 @@ def test_training_layout_retained_font_explicit_and_partial_glossary_validation(
  assert all(r.font.name=='Arial' and r.font.size.pt==12 for r in p.runs)
  data=content();data['abbreviations']='';data['abbreviation_rows']=[{'name':'АД','meaning':''}]
  assert any('сокращения' in s for s in StuContent.model_validate(data).export_errors())
+
+
+def test_refined_banner_approval_rows_and_actual_word_toc_style():
+ from docx.enum.table import WD_ROW_HEIGHT_RULE
+ from app.stu_docx import TITLE_BANNER
+ d=document()
+ assert any(p.text==TITLE_BANNER for cell in d.tables[0].rows[0].cells for p in cell.paragraphs)
+ approval=d.tables[1]
+ assert approval.cell(0,2).text=='Фамилия,\nинициалы'
+ for row in approval.rows[1:]:
+  assert round(row.height.cm,2)==1 and row.height_rule==WD_ROW_HEIGHT_RULE.AT_LEAST
+ for level in [1,2]:
+  styles=[s for s in d.styles if s.style_id==f'TOC{level}']
+  assert len(styles)==1
+  assert styles[0].font.name=='Arial' and styles[0].font.size.pt==12
+  fonts=styles[0].element.rPr.rFonts
+  assert fonts.get(qn('w:ascii'))==fonts.get(qn('w:hAnsi'))==fonts.get(qn('w:cs'))=='Arial'
+  assert not any('Theme' in attr for attr in fonts.attrib)
+ contents=next(p for p in d.paragraphs if p.text=='СОДЕРЖАНИЕ')
+ assert contents.alignment==WD_ALIGN_PARAGRAPH.CENTER and contents.paragraph_format.first_line_indent==0
+ for title in ['АННОТАЦИЯ','1 НАЗНАЧЕНИЕ','7 ОЦЕНКА РИСКОВ']:
+  p=next(p for p in d.paragraphs if p.text==title and (title=='АННОТАЦИЯ' or p.style is not None and p.style.name=='Heading 1'))
+  assert round(p.paragraph_format.first_line_indent.cm,2)==1
+
+
+def test_refined_header_color_and_compact_merged_table_headers():
+ from app.stu_docx import INDICATOR_WIDTHS_CM
+ d=document();header=d.sections[0].header.tables[0]
+ right=header.cell(0,1)
+ for p in right.paragraphs:
+  for run in p.runs:
+   if run.text:assert run.font.name=='Arial' and run.font.size.pt==9 and str(run.font.color.rgb)=='808080'
+ fields=right._tc.xpath('.//w:fldSimple/w:r/w:rPr')
+ assert len(fields)==2
+ for pr in fields:
+  assert pr.find(qn('w:sz')).get(qn('w:val'))=='18'
+  assert pr.find(qn('w:color')).get(qn('w:val'))=='808080'
+ for edge in header._tbl.xpath('.//w:tcBorders/*'):assert edge.get(qn('w:color'))=='000000'
+ indicator=next(t for t in d.tables if len(t.columns)==11)
+ assert all(abs(c.width.cm-expected)<.002 for c,expected in zip(indicator.columns,INDICATOR_WIDTHS_CM))
+ assert_font(indicator,10)
+ risk=next(t for t in d.tables if 'Возможный прецедент' in t.cell(0,0).text)
+ for t in [risk,indicator]:
+  for row in t.rows[:2]:
+   for cell in row.cells:
+    assert len(cell.paragraphs)==1
+    assert cell.paragraphs[0].text.strip()

@@ -4,9 +4,9 @@ from io import BytesIO
 from pathlib import Path
 import re
 from docx import Document
-from docx.shared import Cm, Pt
+from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
 from docx.enum.style import WD_STYLE_TYPE
 from docx.text.paragraph import Paragraph
 from docx.table import Table
@@ -16,6 +16,9 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 BASE=Path(__file__).parent/'assets'/'stu_base.docx'
+INDICATOR_WIDTHS_CM=[0.490361,1.728611,0.779639,1.594556,1.852083,2.159,1.386417,2.007306,1.342319,1.852083,2.056694]
+TITLE_BANNER='С И С Т Е М А  М Е Н Е Д Ж М Е Н Т А  К А Ч Е С Т В А'
+
 INDICATORS=[('name','Показатель'),('unit','Ед. изм.'),('criterion','Критерий для сбора данных'),('target','Нормативное значение'),
  ('source','Источник сбора данных / источник просмотра данных'),('who','Кто вносит'),('what','Что вносит'),('where','Куда вносит'),
  ('frequency','Периодичность анализа'),('responsible','Ответственный')]
@@ -25,11 +28,14 @@ def clean(value):
  return re.sub(r'[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]','',str(value))
 
 
-def field(p,code):
+def field(p,code,size=12,color=None):
  r=p.add_run();f=OxmlElement('w:fldSimple');f.set(qn('w:instr'),code);r._r.addnext(f)
  result=OxmlElement('w:r');pr=OxmlElement('w:rPr');fonts=OxmlElement('w:rFonts')
  for key in ['ascii','hAnsi','cs']:fonts.set(qn('w:'+key),'Arial')
- pr.append(fonts);sz=OxmlElement('w:sz');sz.set(qn('w:val'),'24');pr.append(sz);result.append(pr);f.append(result)
+ pr.append(fonts);sz=OxmlElement('w:sz');sz.set(qn('w:val'),str(size*2));pr.append(sz)
+ if color:
+  c=OxmlElement('w:color');c.set(qn('w:val'),color);pr.append(c)
+ result.append(pr);cached=OxmlElement('w:t');cached.set(qn('xml:space'),'preserve');cached.text=' ';result.append(cached);f.append(result)
 
 
 def appendix_name(value):
@@ -54,6 +60,11 @@ def generate(content):
    if cell._tc in seen:continue
    seen.add(cell._tc)
    for p in cell.paragraphs:
+    if ' '.join(p.text.split())==' '.join(TITLE_BANNER.split()):
+     runs=[r for r in p.runs if r.text]
+     if runs:
+      runs[0].text=TITLE_BANNER
+      for r in runs[1:]:r.text=''
     for r in p.runs:
      for key,value in values.items():
       if isinstance(value,(str,int)) and '{{'+key+'}}' in r.text:r.text=r.text.replace('{{'+key+'}}',clean(value))
@@ -65,20 +76,38 @@ def generate(content):
  for cell,portion in zip(t.rows[0].cells,[3750,1250]):
   cw=cell._tc.get_or_add_tcPr().find(qn('w:tcW'));cw.set(qn('w:type'),'pct');cw.set(qn('w:w'),str(portion))
  t.cell(0,0).text=f'СТУ {clean(content.number)} «{clean(content.title)}»'
- c=t.cell(0,1);c.text='';p=c.paragraphs[0];p.add_run('Страница ');field(p,'PAGE');p.add_run(' из ');field(p,'NUMPAGES')
+ right_style=d.styles.add_style('StuHeaderRight',WD_STYLE_TYPE.PARAGRAPH)
+ right_style.font.name='Arial';right_style.font.size=Pt(9);right_style.font.color.rgb=RGBColor.from_string('808080')
+ right_style.paragraph_format.space_before=Pt(0);right_style.paragraph_format.space_after=Pt(0);right_style.paragraph_format.line_spacing=1
+ c=t.cell(0,1);c.text='';p=c.paragraphs[0];p.add_run('Страница ');field(p,'PAGE',9,'808080');p.add_run(' из ');field(p,'NUMPAGES',9,'808080')
  p=c.add_paragraph('Редакция № '+str(content.edition))
- for cell in t.rows[0].cells:
+ for index,cell in enumerate(t.rows[0].cells):
   for p in cell.paragraphs:
+   if index==1:p.style=right_style
    p.paragraph_format.space_after=Pt(0)
-   for r in p.runs:r.font.name='Arial';r.font.size=Pt(12)
+   for r in p.runs:
+    r.font.name='Arial';r.font.size=Pt(12 if index==0 else 9);r.font.color.rgb=RGBColor.from_string('000000' if index==0 else '808080')
  for cell in t.rows[0].cells:
+  pr=cell._tc.get_or_add_tcPr()
+  for old in list(pr.findall(qn('w:tcBorders'))):pr.remove(old)
   borders=OxmlElement('w:tcBorders')
   for side in ['top','left','bottom','right']:
-   item=OxmlElement('w:'+side);item.set(qn('w:val'),'single');item.set(qn('w:sz'),'4');item.set(qn('w:color'),'A6A6A6');borders.append(item)
+   item=OxmlElement('w:'+side);item.set(qn('w:val'),'single');item.set(qn('w:sz'),'4');item.set(qn('w:color'),'000000');borders.append(item)
   cell._tc.get_or_add_tcPr().append(borders)
- for name in ['TOC 1','TOC 2']:
-  style=d.styles[name] if name in d.styles else d.styles.add_style(name,WD_STYLE_TYPE.PARAGRAPH)
+ # Word resolves TOC styles by styleId; a second case-variant name creates
+ # duplicate TOC1 IDs and can restore Cambria when the contents field updates.
+ for level in [1,2]:
+  style_id=f'TOC{level}'
+  matches=[style for style in d.styles if style.style_id==style_id]
+  style=matches[0] if matches else d.styles.add_style(f'toc {level}',WD_STYLE_TYPE.PARAGRAPH,builtin=True)
+  style.element.set(qn('w:styleId'),style_id)
+  for duplicate in matches[1:]:duplicate.element.getparent().remove(duplicate.element)
   style.font.name='Arial';style.font.size=Pt(12)
+  fonts=style.element.get_or_add_rPr().get_or_add_rFonts()
+  for attr in list(fonts.attrib):del fonts.attrib[attr]
+  for slot in ['ascii','hAnsi','cs','eastAsia']:fonts.set(qn('w:'+slot),'Arial')
+  szcs=OxmlElement('w:szCs');szcs.set(qn('w:val'),'24');style.element.get_or_add_rPr().append(szcs)
+  style.paragraph_format.first_line_indent=Cm(0)
  update=OxmlElement('w:updateFields');update.set(qn('w:val'),'true');d.settings.element.append(update)
  def para(text='',align=None):
   p=d.add_paragraph()
@@ -91,6 +120,7 @@ def generate(content):
  def heading(text,level=1):
   p=d.add_paragraph(style='Heading 1' if re.match(r'^\d+ ',text) or text.startswith('ПРИЛОЖЕНИЕ ') or text=='ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ' else None)
   p.paragraph_format.keep_with_next=True
+  p.paragraph_format.first_line_indent=Cm(1);p.paragraph_format.left_indent=Cm(0)
   r=p.add_run(clean(text));r.bold=True;r.font.name='Arial';r.font.size=Pt(12)
   return p
  def newpage():d.add_page_break()
@@ -134,9 +164,9 @@ def generate(content):
   row._tr.get_or_add_trPr().append(OxmlElement('w:tblHeader'))
   return row
  newpage();heading('ЛИСТ СОГЛАСОВАНИЯ')
- table(['Ответственность','Должность','Фамилия, инициалы','Подпись','Дата'],[[r.role,r.position,r.person,'',''] for r in content.approvals],shade=None,size=10,kind='approval',widths=[3.5,5.44,3.25,2.5,2.5])
+ table(['Ответственность','Должность','Фамилия,\nинициалы','Подпись','Дата'],[[r.role,r.position,r.person,'',''] for r in content.approvals],shade=None,size=10,kind='approval',widths=[3.5,5.44,3.25,2.5,2.5])
  newpage();heading('АННОТАЦИЯ');paragraphs(content.annotation)
- newpage();heading('СОДЕРЖАНИЕ');p=para()
+ newpage();toc_heading=heading('СОДЕРЖАНИЕ');toc_heading.alignment=WD_ALIGN_PARAGRAPH.CENTER;toc_heading.paragraph_format.first_line_indent=Cm(0);p=para()
  begin=OxmlElement('w:fldChar');begin.set(qn('w:fldCharType'),'begin');p.add_run()._r.append(begin)
  instr=OxmlElement('w:instrText');instr.text=' TOC \\o "1-2" \\h \\z \\u ';p.add_run()._r.append(instr)
  separate=OxmlElement('w:fldChar');separate.set(qn('w:fldCharType'),'separate');p.add_run()._r.append(separate)
@@ -147,7 +177,7 @@ def generate(content):
  if content.edition>1:headings.append('ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ')
  headings.append('ВЕДОМОСТЬ ОБУЧЕНИЯ И ОЗНАКОМЛЕНИЯ СО СТАНДАРТОМ')
  for name in headings:
-  p=para(name,WD_ALIGN_PARAGRAPH.LEFT);p.paragraph_format.first_line_indent=Cm(0)
+  p=para(name,WD_ALIGN_PARAGRAPH.LEFT);p.style=next(style for style in d.styles if style.style_id=='TOC1');p.paragraph_format.first_line_indent=Cm(0)
  end=OxmlElement('w:fldChar');end.set(qn('w:fldCharType'),'end');p.add_run()._r.append(end)
  para('Обновите содержание в Word: щёлкните по содержанию и выберите «Обновить поле».')
  newpage()
@@ -189,7 +219,7 @@ def generate(content):
  t=table(['Возможный прецедент','Риски','Риски','Ранг'],[[r.event,r.probability,r.impact,r.rank] for r in content.risks],kind='risk')
  second_header(t,['','Вероятность','Влияние','']);t.cell(0,0).merge(t.cell(1,0));t.cell(0,3).merge(t.cell(1,3));t.cell(0,1).merge(t.cell(0,2)).text='Риски'
  heading('8 ПОКАЗАТЕЛИ ПРОЦЕССА')
- t=table(['№',*[label for _,label in INDICATORS]],[[i,*[getattr(r,k) for k,_ in INDICATORS]] for i,r in enumerate(content.indicators,1)],size=7,kind='indicator')
+ t=table(['№',*[label for _,label in INDICATORS]],[[i,*[getattr(r,k) for k,_ in INDICATORS]] for i,r in enumerate(content.indicators,1)],size=10,kind='indicator',widths=INDICATOR_WIDTHS_CM)
  second_header(t,['','','','','','','Кто вносит','Что вносит','Куда вносит','Периодичность анализа','Ответственный'])
  for i in range(6):t.cell(0,i).merge(t.cell(1,i))
  t.cell(0,6).merge(t.cell(0,8)).text='Внесение данных';t.cell(0,9).merge(t.cell(0,10)).text='Проведение анализа данных для управления процессом'
@@ -216,6 +246,7 @@ def generate(content):
   node=deepcopy(node)
   for element in node.iter(qn('w:p')):
    p=Paragraph(element,d)
+   if p.text.strip() and p.style.name=='Heading 1':p.paragraph_format.first_line_indent=Cm(1);p.paragraph_format.left_indent=Cm(0)
    if not p.runs:p.add_run()
    for r in p.runs:r.font.name='Arial';r.font.size=Pt(12)
   d.element.body.insert(len(d.element.body)-1,node)
@@ -223,10 +254,16 @@ def generate(content):
   t=item['table']
   process=item['kind']=='process'
   for ri,row in enumerate(t.rows):
+   if item['kind']=='approval' and ri>0:
+    row.height=Cm(1);row.height_rule=WD_ROW_HEIGHT_RULE.AT_LEAST
    seen=set()
    for cell in row.cells:
     if cell._tc in seen:continue
     seen.add(cell._tc)
+    if item['kind'] in ['risk','indicator']:
+     for paragraph in list(cell.paragraphs):
+      if len(cell.paragraphs)>1 and not paragraph.text.strip() and not paragraph._p.xpath('.//w:drawing | .//w:fldChar | .//w:fldSimple'):
+       cell._tc.remove(paragraph._p)
     pr=cell._tc.get_or_add_tcPr()
     for old in list(pr):
      if old.tag in (qn('w:tcBorders'),qn('w:shd')):pr.remove(old)
