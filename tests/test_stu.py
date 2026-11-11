@@ -54,7 +54,7 @@ def test_docx_structure_fields_ranks_training_and_no_external_links(client,editi
  saved=c.put(f'/stu/{id}',json={'version':1,'content':data});assert saved.status_code==200 and saved.json()['errors']==[]
  result=c.get(f'/stu/{id}/export.docx');assert result.status_code==200
  d=Document(BytesIO(result.content));body=full_text(d)
- for heading in ['1 НАЗНАЧЕНИЕ','4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ','5 ОТВЕТСТВЕННОСТЬ','8 ПОКАЗАТЕЛИ ПРОЦЕССА','10 ХРАНЕНИЕ','Квалиграмма','Текстовое описание к квалиграмме','Приложение 1','ВЕДОМОСТЬ ОБУЧЕНИЯ']:
+ for heading in ['1 НАЗНАЧЕНИЕ','4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ','5 ОТВЕТСТВЕННОСТЬ','8 ПОКАЗАТЕЛИ ПРОЦЕССА','10 ХРАНЕНИЕ','Квалиграмма','Текстовое описание к квалиграмме','ПРИЛОЖЕНИЕ 1','ВЕДОМОСТЬ ОБУЧЕНИЯ']:
   assert heading in body
  assert ('ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ' in body)==(edition>1)
  assert '12.5-2020' not in body and 'препаратов калия' not in body

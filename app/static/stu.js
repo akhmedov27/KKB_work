@@ -13,9 +13,9 @@ function field(parent,label,obj,key,type='text'){
  else {input=el(type==='textarea'?'textarea':'input');if(type!=='textarea')input.type=type;}
  input.id=id;input.name=key;input.value=obj[key]??'';
  if(type==='number'){input.min='1';input.max='999';}
- if(type==='text'||type==='textarea')input.maxLength=type==='textarea'?20000:500;
+ if(type==='text'||type==='textarea')input.maxLength=key==='meaning'?5000:type==='textarea'?20000:500;
  input.addEventListener('input',()=>{obj[key]=type==='number'?Number(input.value):type==='date'?(input.value||null):Array.isArray(type)&&typeof obj[key]==='number'?Number(input.value):input.value;changed();if(key==='edition')updateEdition();});
- wrap.append(input);parent.append(wrap);return input;
+ wrap.append(input);if(type==='date')button('Очистить дату',()=>{input.value='';obj[key]=null;changed();},wrap);parent.append(wrap);return input;
 }
 function section(title,open=false){const d=el('details',undefined,{class:'panel document-detail'});d.open=open;d.append(el('summary',title));const body=el('div',undefined,{class:'stu-section'});d.append(body);form.append(d);return body;}
 function reorder(array,i,j){if(j<0||j>=array.length)return;[array[i],array[j]]=[array[j],array[i]];changed();}
@@ -34,10 +34,16 @@ function repeat(parent,key,fields,empty){
 }
 function names(parent,key,label){const host=el('div');parent.append(host);function draw(){host.replaceChildren();state[key].forEach((name,i)=>{const row=el('div',undefined,{class:'stu-row'});const holder={name};const input=field(row,label+' '+(i+1),holder,'name');input.addEventListener('input',()=>state[key][i]=holder.name);const controls=el('div',undefined,{class:'stu-controls'});button('↑',()=>{reorder(state[key],i,i-1);draw();},controls);button('↓',()=>{reorder(state[key],i,i+1);draw();},controls);button('Удалить',()=>{if(confirm('Удалить название?')){state[key].splice(i,1);changed();draw();}},controls);row.append(controls);host.append(row);});}button('Добавить '+label.toLowerCase(),()=>{state[key].push('');changed();draw();},parent);draw();}
 let body=section('Реквизиты СТУ',true),grid=el('div',undefined,{class:'metadata-grid'});body.append(grid);
-for(const [key,label,type] of [['number','Номер СТУ из реестра','text'],['title','Наименование СТУ','text'],['edition','Номер редакции','number'],['order_number','Номер приказа (можно оставить пустым)','text'],['order_date','Дата приказа','date'],['effective_date','Дата введения в действие','date']])field(grid,label,state,key,type);
+for(const [key,label,type] of [['number','Номер СТУ из реестра','text'],['title','Наименование СТУ','text'],['edition','Номер редакции','number'],['order_number','Номер приказа (можно оставить пустым)','text'],['order_date','Дата приказа (необязательно)','date'],['effective_date','Дата введения в действие (необязательно)','date']])field(grid,label,state,key,type);
 body=section('Лист согласования');body.append(el('p','Подпись и дата остаются пустыми в Word.'));
 repeat(body,'approvals',[['role','Ответственность',['Согласовал','Разработал']],['position','Должность','text'],['person','Фамилия, инициалы','text']],{role:'Разработал',position:'',person:''});
-for(const [key,label] of [['annotation','Аннотация'],['purpose','1 НАЗНАЧЕНИЕ'],['scope','2 ОБЛАСТЬ ПРИМЕНЕНИЯ'],['references','3 НОРМАТИВНЫЕ ССЫЛКИ'],['abbreviations','4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ']])field(section(label),label,state,key,'textarea');
+for(const [key,label] of [['annotation','Аннотация'],['purpose','1 НАЗНАЧЕНИЕ'],['scope','2 ОБЛАСТЬ ПРИМЕНЕНИЯ'],['references','3 НОРМАТИВНЫЕ ССЫЛКИ']])field(section(label),label,state,key,'textarea');
+body=section('4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ');
+body.append(el('h3','Сокращения'));body.append(el('p','В Word: сокращение - расшифровка. При экспорте сокращения сортируются по алфавиту.'));
+repeat(body,'abbreviation_rows',[['name','Сокращение','text'],['meaning','Расшифровка','textarea']],{name:'',meaning:''});
+body.append(el('h3','Термины'));body.append(el('p','Термины выводятся после сокращений, в своём алфавитном порядке. Название термина будет жирным.'));
+repeat(body,'term_rows',[['name','Термин','text'],['meaning','Определение','textarea']],{name:'',meaning:''});
+if(state.abbreviations)field(body,'Ранее введённый текст (сохранён без изменений; можно перенести в строки выше)',state,'abbreviations','textarea');
 body=section('5 ОТВЕТСТВЕННОСТЬ');field(body,'Кто несёт ответственность за разработку, внедрение и исполнение',state,'owner');
 body.append(el('p','Ответственность за выполнение требований настоящего стандарта учреждения также возлагается на сотрудников подразделений в соответствии с таблицей 1 «Матрица ответственности».'));
 const landscape=el('label'),box=el('input');box.type='checkbox';box.checked=state.matrix_landscape;box.onchange=()=>{state.matrix_landscape=box.checked;changed();};landscape.append(box,document.createTextNode(' Альбомная страница для матрицы (остальные страницы книжные)'));body.append(landscape);

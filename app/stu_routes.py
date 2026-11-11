@@ -29,7 +29,7 @@ def make_router(sessions,render):
  @router.get('/stu/{id}')
  def editor(request:Request,id:int):
   with sessions() as db:row=get(db,id)
-  return render(request,'stu_editor.html',active='stu',title='Конструктор СТУ',draft=row,initial=json.loads(row.payload_json))
+  return render(request,'stu_editor.html',active='stu',title='Конструктор СТУ',draft=row,initial=StuContent.model_validate_json(row.payload_json).model_dump(mode='json'))
  @router.put('/stu/{id}')
  async def save(request:Request,id:int):
   body=await request.body()
