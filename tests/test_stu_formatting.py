@@ -156,3 +156,38 @@ def test_refined_header_color_and_compact_merged_table_headers():
    for cell in row.cells:
     assert len(cell.paragraphs)==1
     assert cell.paragraphs[0].text.strip()
+
+
+def test_matrix_has_no_extra_paragraphs_and_appendix_has_no_indent():
+ d=document()
+ matrix=next(t for t in d.tables if 'Наименование подразделения' in t.cell(0,1).text)
+ for row in matrix.rows[:2]:
+  for cell in row.cells:assert len(cell.paragraphs)==1 and cell.paragraphs[0].text.strip()
+ appendix=next(p for p in d.paragraphs if p.text.startswith('ПРИЛОЖЕНИЕ 1\n'))
+ assert appendix.alignment==WD_ALIGN_PARAGRAPH.CENTER
+ assert appendix.paragraph_format.first_line_indent==appendix.paragraph_format.left_indent==appendix.paragraph_format.right_indent==0
+
+
+def test_current_year_on_cover_and_process_initial_preserves_case(monkeypatch):
+ import app.stu_docx
+ monkeypatch.setattr(app.stu_docx,'current_year',lambda:2031)
+ data=content();data['processes']=['тестовый ПРОЦЕСС','«ещё один»'];d=document(data)
+ p=d.tables[0].rows[-1].cells[0].paragraphs[0]
+ assert p.text=='Красноярск, 2031' and p.alignment==WD_ALIGN_PARAGRAPH.CENTER
+ assert all(r.font.name=='Arial' and r.font.size.pt==12 for r in p.runs)
+ processes=[t.cell(1,0).text for t in d.tables if len(t.columns)==1]
+ assert processes==['6.1 Тестовый ПРОЦЕСС','6.2 «Ещё один»']
+ assert any(p.text=='6.1 Тестовый ПРОЦЕСС' for p in d.paragraphs)
+
+
+def test_proofing_language_in_body_tables_headers_styles_and_defaults():
+ d=document()
+ assert d.core_properties.language=='ru-RU'
+ defaults=d.styles.element.find(qn('w:docDefaults')).find(qn('w:rPrDefault')).find(qn('w:rPr'))
+ assert defaults.find(qn('w:lang')).get(qn('w:val'))=='ru-RU'
+ for root in [d.element,d.styles.element,d.sections[0].header._element,d.sections[0].first_page_header._element]:
+  for lang in root.iter(qn('w:lang')):
+   assert all(lang.get(qn('w:'+slot))=='ru-RU' for slot in ['val','eastAsia','bidi'])
+  assert not list(root.iter(qn('w:noProof')))
+  for run in root.iter(qn('w:r')):
+   assert run.find(qn('w:rPr')).find(qn('w:lang')).get(qn('w:val'))=='ru-RU'

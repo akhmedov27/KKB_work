@@ -1,5 +1,6 @@
 """DOCX constructor based on the supplied hospital template, without Word runtime."""
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 import re
@@ -45,6 +46,40 @@ def appendix_name(value):
  return value
 
 
+def current_year():
+ return datetime.now(timezone(timedelta(hours=7))).year
+
+
+def set_russian_proofing(document):
+ """Set inherited and explicit proofing language across every Word story."""
+ language='ru-RU'
+ defaults=document.styles.element.find(qn('w:docDefaults'))
+ if defaults is None:
+  defaults=OxmlElement('w:docDefaults');document.styles.element.insert(0,defaults)
+ default=defaults.find(qn('w:rPrDefault'))
+ if default is None:default=OxmlElement('w:rPrDefault');defaults.append(default)
+ if default.find(qn('w:rPr')) is None:default.append(OxmlElement('w:rPr'))
+ for part in document.part.package.parts:
+  root=getattr(part,'element',None)
+  if root is None:continue
+  for run in root.iter(qn('w:r')):
+   if run.find(qn('w:rPr')) is None:run.insert(0,OxmlElement('w:rPr'))
+  for pr in root.iter(qn('w:rPr')):
+   if pr.find(qn('w:lang')) is None:pr.append(OxmlElement('w:lang'))
+  for lang in root.iter(qn('w:lang')):
+   for slot in ['val','eastAsia','bidi']:lang.set(qn('w:'+slot),language)
+  for tag in ['noProof','hideSpellingErrors','hideGrammaticalErrors']:
+   for node in list(root.iter(qn('w:'+tag))):node.getparent().remove(node)
+ settings=document.settings.element
+ theme=settings.find(qn('w:themeFontLang'))
+ if theme is None:theme=OxmlElement('w:themeFontLang');settings.append(theme)
+ for slot in ['val','eastAsia','bidi']:theme.set(qn('w:'+slot),language)
+ state=settings.find(qn('w:proofState'))
+ if state is None:state=OxmlElement('w:proofState');settings.append(state)
+ state.set(qn('w:spelling'),'dirty');state.set(qn('w:grammar'),'dirty')
+ document.core_properties.language=language
+
+
 def generate(content):
  d=Document(BASE);s=d.sections[0]
  training=[]
@@ -68,6 +103,16 @@ def generate(content):
     for r in p.runs:
      for key,value in values.items():
       if isinstance(value,(str,int)) and '{{'+key+'}}' in r.text:r.text=r.text.replace('{{'+key+'}}',clean(value))
+ last=d.tables[0].rows[-1]
+ cell=last.cells[0]
+ if cell._tc is not last.cells[-1]._tc:cell=cell.merge(last.cells[-1])
+ cell.text=f'Красноярск, {current_year()}'
+ cell.vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER
+ for p in cell.paragraphs:
+  p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+  p.paragraph_format.first_line_indent=Cm(0);p.paragraph_format.left_indent=Cm(0);p.paragraph_format.right_indent=Cm(0)
+  p.paragraph_format.space_before=Pt(0);p.paragraph_format.space_after=Pt(0)
+  for r in p.runs:r.font.name='Arial';r.font.size=Pt(12)
  s.different_first_page_header_footer=True
  header=s.header
  t=header.tables[0] if header.tables else header.add_table(rows=1,cols=2,width=Cm(17.2))
@@ -171,7 +216,7 @@ def generate(content):
  instr=OxmlElement('w:instrText');instr.text=' TOC \\o "1-2" \\h \\z \\u ';p.add_run()._r.append(instr)
  separate=OxmlElement('w:fldChar');separate.set(qn('w:fldCharType'),'separate');p.add_run()._r.append(separate)
  headings=['1 НАЗНАЧЕНИЕ','2 ОБЛАСТЬ ПРИМЕНЕНИЯ','3 НОРМАТИВНЫЕ ССЫЛКИ','4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ','5 ОТВЕТСТВЕННОСТЬ','6 ОПИСАНИЕ ПРОЦЕССА']
- headings += [f'6.{i} {name}' for i,name in enumerate(content.processes,1)]
+ headings += [f'6.{i} {appendix_name(name)}' for i,name in enumerate(content.processes,1)]
  headings += ['7 ОЦЕНКА РИСКОВ','8 ПОКАЗАТЕЛИ ПРОЦЕССА','9 ВНЕСЕНИЕ ИЗМЕНЕНИЙ','10 ХРАНЕНИЕ']
  headings += [f'ПРИЛОЖЕНИЕ {i}. {appendix_name(name)}' for i,name in enumerate(content.appendices,1)]
  if content.edition>1:headings.append('ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ')
@@ -207,7 +252,7 @@ def generate(content):
  heading('6 ОПИСАНИЕ ПРОЦЕССА')
  paragraphs(content.process_custom or f'Порядок {content.process_name} представлен в виде квалиграммы и текстового описания к ней.')
  for i,name in enumerate(content.processes,1):
-  newpage();t=table([''],[[''],[f'6.{i} {name}'],['']],shade=None,size=24,kind='process')
+  newpage();t=table([''],[[''],[f'6.{i} {appendix_name(name)}'],['']],shade=None,size=24,kind='process')
   t._tbl.remove(t.rows[0]._tr)
   for row,height in zip(t.rows,[9.846,2.845,11.465]):row.height=Cm(height)
   p=t.rows[1].cells[0].paragraphs[0];p.alignment=WD_ALIGN_PARAGRAPH.CENTER
@@ -233,6 +278,7 @@ def generate(content):
  '– Обмен// 4_ДОКУМЕНТЫ ККБ/1 СТАНДАРТЫ УЧРЕЖДЕНИЯ.']:para(line)
  for i,name in enumerate(content.appendices,1):
   newpage();p=heading(f'ПРИЛОЖЕНИЕ {i}');p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+  p.paragraph_format.first_line_indent=Cm(0);p.paragraph_format.left_indent=Cm(0);p.paragraph_format.right_indent=Cm(0)
   r=p.add_run();r.add_break();r.font.name='Arial';r.font.size=Pt(12);r.bold=True
   r=p.add_run(clean(appendix_name(name)));r.font.name='Arial';r.font.size=Pt(12);r.bold=True
  if content.edition>1:
@@ -260,7 +306,7 @@ def generate(content):
    for cell in row.cells:
     if cell._tc in seen:continue
     seen.add(cell._tc)
-    if item['kind'] in ['risk','indicator']:
+    if item['kind'] in ['risk','indicator','matrix']:
      for paragraph in list(cell.paragraphs):
       if len(cell.paragraphs)>1 and not paragraph.text.strip() and not paragraph._p.xpath('.//w:drawing | .//w:fldChar | .//w:fldSimple'):
        cell._tc.remove(paragraph._p)
@@ -281,4 +327,5 @@ def generate(content):
       p.alignment=WD_ALIGN_PARAGRAPH.LEFT if item['kind']=='risk' and ri>=item['headers'] and cell._tc is row.cells[0]._tc else WD_ALIGN_PARAGRAPH.CENTER
      for r in p.runs:r.font.name='Arial';r.font.size=Pt(item['size']);r.bold=not process and ri<item['headers']
  d.core_properties.title=clean('СТУ '+content.number+' '+content.title);d.core_properties.author='ККБ'
+ set_russian_proofing(d)
  output=BytesIO();d.save(output);return output.getvalue()
