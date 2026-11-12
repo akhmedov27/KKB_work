@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block content %}
+<div class="eyebrow">КОНСТРУКТОР СТУ · КВАЛИГРАММА</div><h1>{{ initial.title or 'Процесс' }}</h1>
+<p><a href="/stu/{{ initial.id }}">← Вернуться к СТУ</a></p>
+<p class="notice">До пяти дорожек. Перемещайте блоки мышью; размеры и текст меняются в свойствах. Для общего действия выберите исполнителей и одного ответственного. Зелёный отдел — вход на любом шаге, красный — выход ветви, серый — внешнее подразделение. Схема сохраняется локально. VDX предназначен для открытия в Visio 2007; в Word вставляется изображение.</p>
+<div id="q-toolbar" class="stu-controls"></div><p id="q-status" role="status" aria-live="polite"></p><ul id="q-errors"></ul>
+<div class="q-layout"><section class="panel q-tools"><h2>Дорожки и блоки</h2><div id="q-lanes"></div><div id="q-palette" class="q-palette"></div></section><section class="q-paper" aria-label="Рабочая область" id="q-paper"></section><section class="panel q-properties"><h2>Свойства</h2><div id="q-properties">Выберите блок или стрелку.</div><h3>Связи</h3><div id="q-edges"></div></section></div>
+<section class="panel"><h2>Текстовое описание к квалиграмме</h2><p>Кнопка составит описание только из введённых действий, исполнителей и переходов. Затем текст можно отредактировать.</p><button id="q-describe" type="button">Составить из шагов</button><label for="q-description">Текст описания</label><textarea id="q-description" rows="12" maxlength="20000"></textarea></section>
+<script id="q-data" type="application/json">{{ initial|tojson }}</script><script src="/static/qualigram.js" defer></script>
+{% endblock %}

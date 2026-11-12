@@ -56,4 +56,49 @@ def make_router(sessions,render):
   if errors:raise HTTPException(400,'Заполните перед экспортом: '+'; '.join(errors))
   result=await run_in_threadpool(generate,content)
   return Response(result,media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',headers={'Content-Disposition':'attachment; filename="stu.docx"'})
+ from app.qualigram_model import Qualigram
+ from app.qualigram_render import svg, png, layout_errors, needed_height
+ from app.qualigram_vdx import vdx
+ def graph_content(db,id,pid):
+  row=get(db,id);content=StuContent.model_validate_json(row.payload_json)
+  if pid not in content.process_ids:raise HTTPException(404,'Процесс не найден.')
+  return row,content
+ @router.get('/stu/{id}/qualigrams/{pid}')
+ def graph_editor(request:Request,id:int,pid:str):
+  with sessions() as db:row,content=graph_content(db,id,pid)
+  return render(request,'qualigram_editor.html',active='stu',title='Конструктор квалиграмм',initial={'id':id,'pid':pid,'version':row.version,'title':content.processes[content.process_ids.index(pid)],'diagram':content.qualigrams.get(pid,Qualigram()).model_dump(mode='json')})
+ @router.post('/stu/{id}/qualigrams/{pid}/preview')
+ async def graph_preview(request:Request,id:int,pid:str):
+  with sessions() as db:graph_content(db,id,pid)
+  body=await request.body()
+  if len(body)>512*1024:raise HTTPException(413,'Слишком большая схема.')
+  try:graph=Qualigram.model_validate_json(body)
+  except ValueError:raise HTTPException(400,'Проверьте координаты, границы листа и исполнителей.') from None
+  return {'svg':svg(graph),'errors':graph.errors()+layout_errors(graph),'warnings':graph.warnings(),'heights':{n.id:needed_height(n) for n in graph.nodes},'description':graph.action_description()}
+ @router.put('/stu/{id}/qualigrams/{pid}')
+ async def graph_save(request:Request,id:int,pid:str):
+  body=await request.body()
+  if len(body)>512*1024:raise HTTPException(413,'Слишком большая схема.')
+  try:
+   data=json.loads(body);version=data['version'];graph=Qualigram.model_validate(data['diagram']) if data['diagram'] is not None else None
+   if type(version) is not int or version<1:raise ValueError()
+  except (ValueError,TypeError,KeyError):raise HTTPException(400,'Некорректные данные схемы.') from None
+  with sessions.begin() as db:
+   row,content=graph_content(db,id,pid)
+   if graph is None:content.qualigrams.pop(pid,None)
+   else:content.qualigrams[pid]=graph
+   result=db.execute(update(StuDraft).where(StuDraft.id==id,StuDraft.version==version).values(payload_json=content.model_dump_json(),version=version+1,updated_at=now()))
+   if result.rowcount!=1:raise HTTPException(409,'СТУ изменён в другой вкладке. Скопируйте изменения и обновите страницу.')
+  return {'version':version+1}
+ @router.get('/stu/{id}/qualigrams/{pid}/export.{fmt}')
+ async def graph_export(id:int,pid:str,fmt:str):
+  if fmt not in ('png','vdx','svg'):raise HTTPException(404)
+  with sessions() as db:row,content=graph_content(db,id,pid)
+  graph=content.qualigrams.get(pid)
+  if graph is None:raise HTTPException(400,'Сначала сохраните схему.')
+  errors=graph.errors()+layout_errors(graph)
+  if errors:raise HTTPException(400,'; '.join(errors))
+  name=content.processes[content.process_ids.index(pid)]
+  result=await run_in_threadpool({'png':png,'vdx':vdx,'svg':svg}[fmt],graph,name)
+  return Response(result,media_type={'png':'image/png','vdx':'application/xml','svg':'image/svg+xml'}[fmt],headers={'Content-Disposition':f'attachment; filename="qualigram.{fmt}"'})
  return router

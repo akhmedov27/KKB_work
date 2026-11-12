@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 from datetime import date
 import re
 import unicodedata
+from uuid import uuid5, NAMESPACE_URL
+from app.qualigram_model import Qualigram, ID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Short = Annotated[str, StringConstraints(max_length=500)]
@@ -78,6 +80,8 @@ class StuContent(Row):
     process_name: Short = ''
     process_custom: Long = ''
     processes: list[Short] = Field(default_factory=list,max_length=20)
+    process_ids: list[ID] = Field(default_factory=list,max_length=20)
+    qualigrams: dict[ID,Qualigram] = Field(default_factory=dict,max_length=20)
     risks: list[Risk] = Field(default_factory=list,max_length=100)
     indicators: list[Indicator] = Field(default_factory=list,max_length=50)
     proposals_to: Short = ''
@@ -97,8 +101,17 @@ class StuContent(Row):
             data={**data,'abbreviations':'','abbreviation_rows':[{'name':m[1].strip(),'meaning':m[2].strip()} for m in pairs]}
         return data
 
+    @model_validator(mode='before')
+    @classmethod
+    def upgrade_process_ids(cls,data):
+        if isinstance(data,dict) and 'process_ids' not in data:
+            data={**data,'process_ids':[uuid5(NAMESPACE_URL,f'qms-legacy-process-{i}').hex for i,_ in enumerate(data.get('processes',[]))]}
+        return data
+
     @model_validator(mode='after')
     def matrix_shape(self):
+        if len(self.process_ids)!=len(self.processes) or len(set(self.process_ids))!=len(self.process_ids) or not set(self.qualigrams)<=set(self.process_ids):
+            raise ValueError('Связь квалиграмм с процессами нарушена.')
         if any(len(row.marks)!=len(self.positions) for row in self.departments):
             raise ValueError('Число отметок в строке матрицы должно совпадать с числом должностей.')
         return self
@@ -122,4 +135,8 @@ class StuContent(Row):
         if any(not p.strip() for p in self.appendices):errors.append('Названия приложений')
         if self.edition>1 and (not self.changes_reviewed or not self.changes or any(not r.pages.strip() or not r.description.strip() for r in self.changes)):
             errors.append('Лист регистрации изменений: подтвердите проверку и заполните страницы и описания')
+        for i,id in enumerate(self.process_ids,1):
+            if id in self.qualigrams:
+                from app.qualigram_render import layout_errors
+                errors.extend(f'Квалиграмма 6.{i}: '+e for e in self.qualigrams[id].errors()+layout_errors(self.qualigrams[id]))
         return errors

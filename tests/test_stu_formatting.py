@@ -191,3 +191,22 @@ def test_proofing_language_in_body_tables_headers_styles_and_defaults():
   assert not list(root.iter(qn('w:noProof')))
   for run in root.iter(qn('w:r')):
    assert run.find(qn('w:rPr')).find(qn('w:lang')).get(qn('w:val'))=='ru-RU'
+
+
+def test_latest_header_widths_real_merged_borders_and_training():
+ d=document();header=d.sections[0].header.tables[0]
+ for cell,cm in zip(header.rows[0].cells,[12.94,4.5]):assert abs(cell.width.cm-cm)<.003
+ for table in d.tables:
+  if not any(key in table.cell(0,0).text for key in ['№\nп/п','Возможный прецедент','№']):continue
+  for tr in table._tbl.tr_lst:
+   for tc in tr.tc_lst:
+    pr=tc.get_or_add_tcPr();merge=pr.find(qn('w:vMerge'))
+    if merge is not None and merge.get(qn('w:val'),'continue')=='continue':
+     for side in ['left','right']:
+      assert pr.find(qn('w:tcBorders')).find(qn('w:'+side)).get(qn('w:val'))=='single'
+ text='\n'.join(p.text for p in d.paragraphs)
+ assert 'ОБУЧЕНИЯ  И' not in text
+ paras=[p for p in d.paragraphs if 'Обучение прошел, со стандартом ознакомлен:' in p.text]
+ assert paras and all(r.bold for p in paras for r in p.runs if r.text)
+ risk=next(t for t in d.tables if 'Возможный прецедент' in t.cell(0,0).text)
+ assert risk.columns[1].width.cm>=2.9

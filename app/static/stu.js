@@ -32,7 +32,14 @@ function repeat(parent,key,fields,empty){
  });}
  button('Добавить строку',()=>{state[key].push({...empty});changed();draw();},parent);draw();
 }
-function names(parent,key,label){const host=el('div');parent.append(host);function draw(){host.replaceChildren();state[key].forEach((name,i)=>{const row=el('div',undefined,{class:'stu-row'});const holder={name};const input=field(row,label+' '+(i+1),holder,'name');input.addEventListener('input',()=>state[key][i]=holder.name);const controls=el('div',undefined,{class:'stu-controls'});button('↑',()=>{reorder(state[key],i,i-1);draw();},controls);button('↓',()=>{reorder(state[key],i,i+1);draw();},controls);button('Удалить',()=>{if(confirm('Удалить название?')){state[key].splice(i,1);changed();draw();}},controls);row.append(controls);host.append(row);});}button('Добавить '+label.toLowerCase(),()=>{state[key].push('');changed();draw();},parent);draw();}
+function names(parent,key,label){
+ const host=el('div');parent.append(host);const proc=key==='processes';
+ function move(i,j){if(j<0||j>=state[key].length)return;reorder(state[key],i,j);if(proc)[state.process_ids[i],state.process_ids[j]]=[state.process_ids[j],state.process_ids[i]];draw();}
+ function draw(){host.replaceChildren();state[key].forEach((name,i)=>{const row=el('div',undefined,{class:'stu-row'}),holder={name};const input=field(row,label+' '+(i+1),holder,'name');input.addEventListener('input',()=>state[key][i]=holder.name);const controls=el('div',undefined,{class:'stu-controls'});
+ button('↑',()=>move(i,i-1),controls);button('↓',()=>move(i,i+1),controls);
+ if(proc)button('Открыть квалиграмму',async()=>{if(busy)return;busy=true;form.inert=true;try{await save();location.href='/stu/'+initial.id+'/qualigrams/'+state.process_ids[i];}catch(e){status.textContent=e.message;}finally{busy=false;form.inert=false;}},controls);
+ button('Удалить',()=>{if(confirm('Удалить название и связанную схему?')){state[key].splice(i,1);if(proc){delete state.qualigrams[state.process_ids[i]];state.process_ids.splice(i,1);}changed();draw();}},controls);row.append(controls);host.append(row);});}
+ button('Добавить '+label.toLowerCase(),()=>{if(state[key].length>=20)return;state[key].push('');if(proc)state.process_ids.push(crypto.randomUUID().replaceAll('-',''));changed();draw();},parent);draw();}
 let body=section('Реквизиты СТУ',true),grid=el('div',undefined,{class:'metadata-grid'});body.append(grid);
 for(const [key,label,type] of [['number','Номер СТУ из реестра','text'],['title','Наименование СТУ','text'],['edition','Номер редакции','number'],['order_number','Номер приказа (можно оставить пустым)','text'],['order_date','Дата приказа (необязательно)','date'],['effective_date','Дата введения в действие (необязательно)','date']])field(grid,label,state,key,type);
 body=section('Лист согласования');body.append(el('p','Подпись и дата остаются пустыми в Word.'));
@@ -60,7 +67,7 @@ function drawMatrix(){matrix.replaceChildren();const roles=el('div');roles.appen
  });scroll.append(table);matrix.append(scroll);button('Добавить подразделение',()=>{state.departments.push({name:'',marks:state.positions.map(()=>false)});changed();drawMatrix();},matrix);
  matrix.append(el('p','В Word отмеченные ячейки будут обозначены V. Если столбцов много, включите альбомную страницу.'));
 }drawMatrix();
-body=section('6 ОПИСАНИЕ ПРОЦЕССА');field(body,'Порядок … представлен в виде квалиграммы и текстового описания к ней. Вставка вместо многоточия:',state,'process_name');field(body,'Либо полностью свой текст вступления (имеет приоритет)',state,'process_custom','textarea');names(body,'processes','Процесс');body.append(el('p','Для каждого процесса: страница с названием, пустая страница «Квалиграмма» и пустая страница «Текстовое описание к квалиграмме».'));
+body=section('6 ОПИСАНИЕ ПРОЦЕССА');field(body,'Порядок … представлен в виде квалиграммы и текстового описания к ней. Вставка вместо многоточия:',state,'process_name');field(body,'Либо полностью свой текст вступления (имеет приоритет)',state,'process_custom','textarea');names(body,'processes','Процесс');body.append(el('p','Для каждого процесса: страница с названием, страница «Квалиграмма» и страница «Текстовое описание к квалиграмме». Заполните их в конструкторе схем.'));
 repeat(section('7 ОЦЕНКА РИСКОВ'),'risks',[['event','Возможный прецедент','text'],['probability','Вероятность',[1,2,3,4,5]],['impact','Влияние',[1,2,3,4,5]]],{event:'',probability:1,impact:1});
 const indicatorFields=[['name','Показатель'],['unit','Ед. изм.'],['criterion','Критерий для сбора данных'],['target','Нормативное значение'],['source','Источник данных'],['who','Кто вносит'],['what','Что вносит'],['where','Куда вносит'],['frequency','Периодичность анализа'],['responsible','Ответственный']];
 repeat(section('8 ПОКАЗАТЕЛИ ПРОЦЕССА'),'indicators',indicatorFields.map(([k,label])=>[k,label,'text']),Object.fromEntries(indicatorFields.map(([k])=>[k,''])));

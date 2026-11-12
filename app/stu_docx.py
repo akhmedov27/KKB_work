@@ -116,10 +116,10 @@ def generate(content):
  s.different_first_page_header_footer=True
  header=s.header
  t=header.tables[0] if header.tables else header.add_table(rows=1,cols=2,width=Cm(17.2))
- # Relative widths let the same linked header fit portrait and landscape pages.
- tw=t._tbl.tblPr.find(qn('w:tblW'));tw.set(qn('w:type'),'pct');tw.set(qn('w:w'),'5000')
- for cell,portion in zip(t.rows[0].cells,[3750,1250]):
-  cw=cell._tc.get_or_add_tcPr().find(qn('w:tcW'));cw.set(qn('w:type'),'pct');cw.set(qn('w:w'),str(portion))
+ t.autofit=False
+ tw=t._tbl.tblPr.find(qn('w:tblW'));tw.set(qn('w:type'),'dxa');tw.set(qn('w:w'),str(round(17.44*1440/2.54)))
+ for col,cell,cm in zip(t.columns,t.rows[0].cells,[12.94,4.5]):
+  col.width=Cm(cm);cell.width=Cm(cm)
  t.cell(0,0).text=f'СТУ {clean(content.number)} «{clean(content.title)}»'
  right_style=d.styles.add_style('StuHeaderRight',WD_STYLE_TYPE.PARAGRAPH)
  right_style.font.name='Arial';right_style.font.size=Pt(9);right_style.font.color.rgb=RGBColor.from_string('808080')
@@ -174,7 +174,7 @@ def generate(content):
   t=d.add_table(rows=1,cols=len(headers));t.autofit=False
   width=d.sections[-1].page_width-d.sections[-1].left_margin-d.sections[-1].right_margin
   weights=[1]*len(headers)
-  if len(headers)==4:weights=[5,1.2,1.2,1.1]
+  if len(headers)==4:weights=[8.2,3.8,3,2.2]
   if len(headers)==5:weights=[1,1,1.3,2,4]
   if headers[0]=='№\nп/п':weights=[.8,3.2,*[(width/360000-4.0)/(len(headers)-2)]*(len(headers)-2)]
   if len(headers)==11:weights=[.6,2.3,1,1.5,1.7,2,1.2,1.3,1.2,1.5,1.5]
@@ -258,8 +258,24 @@ def generate(content):
   p=t.rows[1].cells[0].paragraphs[0];p.alignment=WD_ALIGN_PARAGRAPH.CENTER
   # A real heading in the middle cell is included in Word TOC.
   ppr=p._p.get_or_add_pPr();o=OxmlElement('w:outlineLvl');o.set(qn('w:val'),'1');ppr.append(o)
-  newpage();para('Квалиграмма',WD_ALIGN_PARAGRAPH.LEFT)
-  newpage();para('Текстовое описание к квалиграмме',WD_ALIGN_PARAGRAPH.LEFT)
+  graph=content.qualigrams.get(content.process_ids[i-1])
+  landscape=graph is not None and graph.orientation=='landscape'
+  if landscape:
+   sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.LANDSCAPE;sec.page_width,sec.page_height=Cm(29.7),Cm(21);sec.different_first_page_header_footer=False
+  else:newpage()
+  para('Квалиграмма',WD_ALIGN_PARAGRAPH.LEFT)
+  if graph:
+   from app.qualigram_render import png
+   sec=d.sections[-1];available_w=sec.page_width-sec.left_margin-sec.right_margin
+   available_h=sec.page_height-sec.top_margin-sec.bottom_margin-Cm(1.8)
+   scale=min(available_w/graph.width,available_h/graph.height)
+   pic=d.add_paragraph();pic.paragraph_format.space_after=Pt(0)
+   pic.add_run().add_picture(BytesIO(png(graph,name)),width=int(graph.width*scale),height=int(graph.height*scale))
+  if landscape:
+   sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.PORTRAIT;sec.page_width,sec.page_height=Cm(21),Cm(29.7);sec.different_first_page_header_footer=False
+  else:newpage()
+  para('Текстовое описание к квалиграмме',WD_ALIGN_PARAGRAPH.LEFT)
+  if graph:paragraphs(graph.description)
  newpage();heading('7 ОЦЕНКА РИСКОВ')
  t=table(['Возможный прецедент','Риски','Риски','Ранг'],[[r.event,r.probability,r.impact,r.rank] for r in content.risks],kind='risk')
  second_header(t,['','Вероятность','Влияние','']);t.cell(0,0).merge(t.cell(1,0));t.cell(0,3).merge(t.cell(1,3));t.cell(0,1).merge(t.cell(0,2)).text='Риски'
@@ -292,9 +308,13 @@ def generate(content):
   node=deepcopy(node)
   for element in node.iter(qn('w:p')):
    p=Paragraph(element,d)
+   if 'ОБУЧЕНИЯ  И' in p.text:
+    for run in p.runs:run.text=run.text.replace('ОБУЧЕНИЯ  И','ОБУЧЕНИЯ И')
    if p.text.strip() and p.style.name=='Heading 1':p.paragraph_format.first_line_indent=Cm(1);p.paragraph_format.left_indent=Cm(0)
    if not p.runs:p.add_run()
-   for r in p.runs:r.font.name='Arial';r.font.size=Pt(12)
+   for r in p.runs:
+    r.font.name='Arial';r.font.size=Pt(12)
+    if 'Обучение прошел, со стандартом ознакомлен:' in p.text:r.bold=True
   d.element.body.insert(len(d.element.body)-1,node)
  for item in tables:
   t=item['table']
@@ -326,6 +346,29 @@ def generate(content):
      if item['kind'] in ['approval','matrix','process','risk','indicator']:
       p.alignment=WD_ALIGN_PARAGRAPH.LEFT if item['kind']=='risk' and ri>=item['headers'] and cell._tc is row.cells[0]._tc else WD_ALIGN_PARAGRAPH.CENTER
      for r in p.runs:r.font.name='Arial';r.font.size=Pt(item['size']);r.bold=not process and ri<item['headers']
+ # Write borders on physical continuation cells too; python-docx row.cells
+ # aliases vertical merges to their origin and otherwise leaves gaps in the frame.
+ for item in tables:
+  if item['kind']=='process':continue
+  rows=[]
+  for tr in item['table']._tbl.tr_lst:
+   cells={};col=0
+   for tc in tr.tc_lst:
+    cells[col]=tc;span=tc.tcPr.find(qn('w:gridSpan')) if tc.tcPr is not None else None
+    col+=int(span.get(qn('w:val'))) if span is not None else 1
+   rows.append(cells)
+  for ri,cells in enumerate(rows):
+   for col,tc in cells.items():
+    pr=tc.get_or_add_tcPr();merge=pr.find(qn('w:vMerge'))
+    continuation=merge is not None and merge.get(qn('w:val'),'continue')=='continue'
+    next_tc=rows[ri+1].get(col) if ri+1<len(rows) else None
+    next_merge=next_tc.tcPr.find(qn('w:vMerge')) if next_tc is not None and next_tc.tcPr is not None else None
+    continues=next_merge is not None and next_merge.get(qn('w:val'),'continue')=='continue'
+    for old in list(pr.findall(qn('w:tcBorders'))):pr.remove(old)
+    borders=OxmlElement('w:tcBorders')
+    for side in ['top','left','bottom','right']:
+     edge=OxmlElement('w:'+side);edge.set(qn('w:val'),'nil' if (side=='top' and continuation) or (side=='bottom' and continues) else 'single');edge.set(qn('w:sz'),'4');edge.set(qn('w:color'),'000000');borders.append(edge)
+    pr.append(borders)
  d.core_properties.title=clean('СТУ '+content.number+' '+content.title);d.core_properties.author='ККБ'
  set_russian_proofing(d)
  output=BytesIO();d.save(output);return output.getvalue()
