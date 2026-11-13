@@ -89,3 +89,26 @@ def test_ports_for_shared_block_and_dashed_raster_geometry():
  assert len(group.findall('s:line',ns))>3
  q.orientation='landscape';assert q.width==1697 and q.height==1200
  assert png(q).startswith(b'\x89PNG')
+
+
+@pytest.mark.parametrize('orientation',['portrait','landscape'])
+def test_vdx_2003_ordered_sections_against_saved_visio_contract(orientation):
+ """LibreOffice tolerates malformed section order; Visio's XML reader does not."""
+ from pathlib import Path
+ from lxml import etree
+ from app.qualigram_model import KINDS,Node,Edge
+ schema=etree.XMLSchema(etree.parse(str(Path(__file__).parent/'fixtures'/'visio2003_sections.xsd')))
+ q=Qualigram.model_validate(diagram());q.orientation=orientation
+ for i,kind in enumerate(KINDS):
+  q.nodes.append(Node(id='extra'+str(i),kind=kind,text='Проверка '+kind,x=40+(i%4)*250,y=750+(i//4)*100,width=220,height=80,lanes=['a'],responsible='a'))
+ for i,kind in enumerate(['information','defect','risk']):q.edges.append(Edge(id='link'+str(i),source='extra'+str(i),target='extra'+str(i+1),kind=kind,label='Подпись связи'))
+ root=etree.fromstring(vdx(q,'Заголовок'))
+ for tag in ['Char','Para','TextBlock','Line','Fill','XForm']:
+  nodes=root.findall('.//v:'+tag,{'v':NS});assert nodes
+  for node in nodes:schema.assertValid(node)
+ # Reproduce the exact old export sequence reported by Visio (Color after Size).
+ broken=etree.fromstring(f'<Char xmlns="{NS}" IX="0"><Font>0</Font><Size>0.15</Size><Color>0</Color><Style>0</Style></Char>'.encode())
+ assert not schema.validate(broken)
+ # It is insufficient to move Color: the trailing character cells must exist too.
+ char=root.find('.//v:Char',{'v':NS});char.remove(char.find('v:DblUnderline',{'v':NS}))
+ assert not schema.validate(char)

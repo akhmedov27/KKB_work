@@ -1,0 +1,130 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:v="http://schemas.microsoft.com/visio/2003/core" targetNamespace="http://schemas.microsoft.com/visio/2003/core" elementFormDefault="qualified">
+  <xs:annotation>
+    <xs:documentation>Focused compatibility contract for emitted VDX 2003 sections, not the full Microsoft document schema. Ordered cells taken from a Visio 11.0 saved document: https://github.com/GNOME/dia/blob/master/samples/Visio/render-test-vdx-from-svg.vdx . No reference diagram content is included.</xs:documentation>
+  </xs:annotation>
+  <xs:complexType name="Cell" mixed="true">
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+  <xs:element name="Char">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Font" type="v:Cell"/>
+        <xs:element name="Color" type="v:Cell"/>
+        <xs:element name="Style" type="v:Cell"/>
+        <xs:element name="Case" type="v:Cell"/>
+        <xs:element name="Pos" type="v:Cell"/>
+        <xs:element name="FontScale" type="v:Cell"/>
+        <xs:element name="Size" type="v:Cell"/>
+        <xs:element name="DblUnderline" type="v:Cell"/>
+        <xs:element name="Overline" type="v:Cell"/>
+        <xs:element name="Strikethru" type="v:Cell"/>
+        <xs:element name="Highlight" type="v:Cell"/>
+        <xs:element name="DoubleStrikethrough" type="v:Cell"/>
+        <xs:element name="RTLText" type="v:Cell"/>
+        <xs:element name="UseVertical" type="v:Cell"/>
+        <xs:element name="Letterspace" type="v:Cell"/>
+        <xs:element name="ColorTrans" type="v:Cell"/>
+        <xs:element name="AsianFont" type="v:Cell"/>
+        <xs:element name="ComplexScriptFont" type="v:Cell"/>
+        <xs:element name="LocalizeFont" type="v:Cell"/>
+        <xs:element name="ComplexScriptSize" type="v:Cell"/>
+        <xs:element name="LangID" type="v:Cell"/>
+      </xs:sequence>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Para">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="IndFirst" type="v:Cell"/>
+        <xs:element name="IndLeft" type="v:Cell"/>
+        <xs:element name="IndRight" type="v:Cell"/>
+        <xs:element name="SpLine" type="v:Cell"/>
+        <xs:element name="SpBefore" type="v:Cell"/>
+        <xs:element name="SpAfter" type="v:Cell"/>
+        <xs:element name="HorzAlign" type="v:Cell"/>
+        <xs:element name="Bullet" type="v:Cell"/>
+        <xs:element name="BulletStr" type="v:Cell"/>
+        <xs:element name="BulletFont" type="v:Cell"/>
+        <xs:element name="LocalizeBulletFont" type="v:Cell"/>
+        <xs:element name="BulletFontSize" type="v:Cell"/>
+        <xs:element name="TextPosAfterBullet" type="v:Cell"/>
+        <xs:element name="Flags" type="v:Cell"/>
+      </xs:sequence>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="TextBlock">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="LeftMargin" type="v:Cell"/>
+        <xs:element name="RightMargin" type="v:Cell"/>
+        <xs:element name="TopMargin" type="v:Cell"/>
+        <xs:element name="BottomMargin" type="v:Cell"/>
+        <xs:element name="VerticalAlign" type="v:Cell"/>
+        <xs:element name="TextBkgnd" type="v:Cell"/>
+        <xs:element name="DefaultTabStop" type="v:Cell"/>
+        <xs:element name="TextDirection" type="v:Cell"/>
+        <xs:element name="TextBkgndTrans" type="v:Cell"/>
+      </xs:sequence>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Line">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="LineWeight" type="v:Cell"/>
+        <xs:element name="LineColor" type="v:Cell"/>
+        <xs:element name="LinePattern" type="v:Cell"/>
+        <xs:element name="Rounding" type="v:Cell"/>
+        <xs:element name="EndArrowSize" type="v:Cell"/>
+        <xs:element name="BeginArrow" type="v:Cell"/>
+        <xs:element name="EndArrow" type="v:Cell"/>
+        <xs:element name="LineCap" type="v:Cell"/>
+        <xs:element name="BeginArrowSize" type="v:Cell"/>
+        <xs:element name="LineColorTrans" type="v:Cell"/>
+      </xs:sequence>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Fill">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="FillForegnd" type="v:Cell"/>
+        <xs:element name="FillBkgnd" type="v:Cell"/>
+        <xs:element name="FillPattern" type="v:Cell"/>
+        <xs:element name="ShdwForegnd" type="v:Cell"/>
+        <xs:element name="ShdwBkgnd" type="v:Cell"/>
+        <xs:element name="ShdwPattern" type="v:Cell"/>
+        <xs:element name="FillForegndTrans" type="v:Cell"/>
+        <xs:element name="FillBkgndTrans" type="v:Cell"/>
+        <xs:element name="ShdwForegndTrans" type="v:Cell"/>
+        <xs:element name="ShdwBkgndTrans" type="v:Cell"/>
+        <xs:element name="ShapeShdwType" type="v:Cell"/>
+        <xs:element name="ShapeShdwOffsetX" type="v:Cell"/>
+        <xs:element name="ShapeShdwOffsetY" type="v:Cell"/>
+        <xs:element name="ShapeShdwObliqueAngle" type="v:Cell"/>
+        <xs:element name="ShapeShdwScaleFactor" type="v:Cell"/>
+      </xs:sequence>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="XForm">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="PinX" type="v:Cell"/>
+        <xs:element name="PinY" type="v:Cell"/>
+        <xs:element name="Width" type="v:Cell"/>
+        <xs:element name="Height" type="v:Cell"/>
+        <xs:element name="LocPinX" type="v:Cell"/>
+        <xs:element name="LocPinY" type="v:Cell"/>
+        <xs:element name="Angle" type="v:Cell"/>
+        <xs:element name="FlipX" type="v:Cell"/>
+        <xs:element name="FlipY" type="v:Cell"/>
+        <xs:element name="ResizeMode" type="v:Cell"/>
+      </xs:sequence>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

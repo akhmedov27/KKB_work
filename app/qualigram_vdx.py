@@ -11,7 +11,7 @@ def vdx(graph,title=''):
   e=ET.SubElement(parent,'{'+NS+'}'+name,{k:str(v) for k,v in attrs.items()})
   if value is not None:e.text=f'{value:.9f}' if isinstance(value,float) else str(value)
   return e
- root=ET.Element('{'+NS+'}VisioDocument',{'{http://www.w3.org/XML/1998/namespace}space':'preserve'})
+ root=ET.Element('{'+NS+'}VisioDocument',{'{http://www.w3.org/XML/1998/namespace}space':'preserve','version':'11.0','DocLangID':'1049','metric':'1'})
  props=child(root,'DocumentProperties');child(props,'Title',title);child(props,'Creator','QMS Assistant KKB')
  faces=child(root,'FaceNames');child(faces,'FaceName',ID=0,Name='Arial')
  pages=child(root,'Pages');page=child(pages,'Page',ID=0,NameU='Qualigram',Name='Квалиграмма')
@@ -25,12 +25,18 @@ def vdx(graph,title=''):
   serial+=1;return serial
  def xform(shape,cx,cy,w,h,angle=0):
   x=child(shape,'XForm')
-  for key,value in [('PinX',cx),('PinY',cy),('Width',w),('Height',h),('LocPinX',w/2),('LocPinY',h/2),('Angle',angle)]:child(x,key,value)
+  for key,value in [('PinX',cx),('PinY',cy),('Width',w),('Height',h),('LocPinX',w/2),('LocPinY',h/2),('Angle',angle),('FlipX',0),('FlipY',0),('ResizeMode',0)]:child(x,key,value)
  def appearance(shape,fill='#FFFFFF',line='#111111',pattern=1,rounding=0,arrow=0):
-  l=child(shape,'Line');child(l,'LineWeight',.009);child(l,'LineColor',line);child(l,'LinePattern',pattern);child(l,'EndArrow',arrow);child(l,'Rounding',rounding)
-  f=child(shape,'Fill');child(f,'FillForegnd','#FFFFFF' if fill=='none' else fill);child(f,'FillBkgnd','#FFFFFF');child(f,'FillPattern',0 if fill=='none' else 1)
+  l=child(shape,'Line')
+  for key,value in [('LineWeight',.009),('LineColor',line),('LinePattern',pattern),('Rounding',rounding),
+                    ('EndArrowSize',2),('BeginArrow',0),('EndArrow',arrow),('LineCap',0),('BeginArrowSize',2),('LineColorTrans',0)]:child(l,key,value)
+  f=child(shape,'Fill')
+  for key,value in [('FillForegnd','#FFFFFF' if fill=='none' else fill),('FillBkgnd','#FFFFFF'),('FillPattern',0 if fill=='none' else 1),
+                    ('ShdwForegnd',0),('ShdwBkgnd',1),('ShdwPattern',0),('FillForegndTrans',0),('FillBkgndTrans',0),
+                    ('ShdwForegndTrans',0),('ShdwBkgndTrans',0),('ShapeShdwType',0),('ShapeShdwOffsetX',0),('ShapeShdwOffsetY',0),
+                    ('ShapeShdwObliqueAngle',0),('ShapeShdwScaleFactor',1)]:child(f,key,value)
  def geometry(shape,w,h,kind='rect'):
-  g=child(shape,'Geom',IX=0);child(g,'NoFill',0);child(g,'NoLine',0)
+  g=child(shape,'Geom',IX=0);child(g,'NoFill',0);child(g,'NoLine',0);child(g,'NoShow',0);child(g,'NoSnap',0)
   if kind=='ellipse':
    e=child(g,'Ellipse',IX=1)
    for key,value in [('X',w/2),('Y',h/2),('A',w),('B',h/2),('C',w/2),('D',h)]:child(e,key,value)
@@ -40,10 +46,20 @@ def vdx(graph,title=''):
    for i,(px,py) in enumerate(points,1):
     p=child(g,'MoveTo' if i==1 else 'LineTo',IX=i);child(p,'X',px);child(p,'Y',py)
  def text(shape,value,size,color='#111111',align=1,bold=False):
-  c=child(shape,'Char',IX=0);child(c,'Font',0);child(c,'Size',size,Unit='PT');child(c,'Color',color);child(c,'Style',1 if bold else 0)
-  p=child(shape,'Para',IX=0);child(p,'HorzAlign',align)
+  # VDX 2003 character cells form an ordered sequence. Visio rejects a
+  # Color after Size (LibreOffice's importer silently tolerates this).
+  c=child(shape,'Char',IX=0)
+  for key,cell_value in [('Font',0),('Color',color),('Style',1 if bold else 0),('Case',0),('Pos',0),('FontScale',1),
+                    ('Size',size),('DblUnderline',0),('Overline',0),('Strikethru',0),('Highlight',0),('DoubleStrikethrough',0),
+                    ('RTLText',0),('UseVertical',0),('Letterspace',0),('ColorTrans',0),('AsianFont',0),('ComplexScriptFont',0),
+                    ('LocalizeFont',0),('ComplexScriptSize',-1),('LangID',1049)]:
+   child(c,key,cell_value,**({'Unit':'PT'} if key=='Size' else {}))
+  p=child(shape,'Para',IX=0)
+  for key,cell_value in [('IndFirst',0),('IndLeft',0),('IndRight',0),('SpLine',-1.2),('SpBefore',0),('SpAfter',0),
+                    ('HorzAlign',align),('Bullet',0),('BulletStr',''),('BulletFont',0),('LocalizeBulletFont',0),
+                    ('BulletFontSize',-1),('TextPosAfterBullet',0),('Flags',0)]:child(p,key,cell_value)
   block=child(shape,'TextBlock')
-  for key,value2 in [('LeftMargin',.06),('RightMargin',.06),('TopMargin',.04),('BottomMargin',.04),('VerticalAlign',1)]:child(block,key,value2)
+  for key,value2 in [('LeftMargin',.06),('RightMargin',.06),('TopMargin',.04),('BottomMargin',.04),('VerticalAlign',1),('TextBkgnd',0),('DefaultTabStop',.5),('TextDirection',0),('TextBkgndTrans',0)]:child(block,key,value2)
   child(shape,'Text',value)
  def rect(parent,x,y,w,h,value='',fill='#FFFFFF',font=16,bold=False,kind='rect',line='#111111',rounding=0):
   shape=child(parent,'Shape',ID=ident(),Type='Shape');xform(shape,(x+w/2)*scale,page_height-(y+h/2)*scale,w*scale,h*scale)
@@ -90,7 +106,7 @@ def vdx(graph,title=''):
    child(connects,'Connect',FromSheet=shape.get('ID'),FromCell=prefix+'X',FromPart=9 if prefix=='Begin' else 12,
          ToSheet=nid,ToCell=f'Connections.X{port_index[side]+1}',ToPart=100+port_index[side])
   appearance(shape,'none','#111111' if edge.kind=='information' else '#D22222',pattern=2 if edge.kind=='defect' else 1,arrow=4)
-  g=child(shape,'Geom',IX=0);child(g,'NoFill',1);p=child(g,'MoveTo',IX=1);child(p,'X',0);child(p,'Y',0)
+  g=child(shape,'Geom',IX=0);child(g,'NoFill',1);child(g,'NoLine',0);child(g,'NoShow',0);child(g,'NoSnap',0);p=child(g,'MoveTo',IX=1);child(p,'X',0);child(p,'Y',0)
   p=child(g,'LineTo',IX=2);child(p,'X',length,F='Width');child(p,'Y',0)
   if edge.label:
    text(shape,edge.label,14*scale)
