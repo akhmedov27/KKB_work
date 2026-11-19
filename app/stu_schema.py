@@ -5,6 +5,7 @@ import re
 import unicodedata
 from uuid import uuid5, NAMESPACE_URL
 from app.qualigram_model import Qualigram, ID
+from app.stu_sections import Section, outline, section_errors
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Short = Annotated[str, StringConstraints(max_length=500)]
@@ -59,6 +60,8 @@ class Change(Row):
     description: Short = ''
 
 class StuContent(Row):
+    mode: Literal['standard','free'] = 'standard'
+    sections: list[Section] = Field(default_factory=list,max_length=50)
     number: Short = ''
     title: Short = ''
     edition: int = Field(default=1,ge=1,le=999,strict=True)
@@ -112,12 +115,28 @@ class StuContent(Row):
     def matrix_shape(self):
         if len(self.process_ids)!=len(self.processes) or len(set(self.process_ids))!=len(self.process_ids) or not set(self.qualigrams)<=set(self.process_ids):
             raise ValueError('Связь квалиграмм с процессами нарушена.')
+        items=[item for _,_,item in outline(self.sections)]
+        if len(items)>50 or sum(len(item.blocks) for item in items)>200:
+            raise ValueError('Не более 50 разделов и подразделов и 200 блоков.')
+        cells=sum(len(block.headers)*(len(block.rows)+1) for item in items for block in item.blocks if block.kind=='table')
+        if cells>5000:raise ValueError('Не более 5000 ячеек обычных таблиц в документе.')
+        ids=[item.id for item in items]+[block.id for item in items for block in item.blocks]
+        if len(ids)!=len(set(ids)):raise ValueError('Идентификаторы разделов и блоков должны быть уникальны.')
         if any(len(row.marks)!=len(self.positions) for row in self.departments):
             raise ValueError('Число отметок в строке матрицы должно совпадать с числом должностей.')
         return self
 
     def export_errors(self):
         errors=[]
+        if self.mode=='free':
+            for key,label in {'number':'Номер СТУ','title':'Наименование СТУ','annotation':'Аннотация'}.items():
+                if not getattr(self,key).strip():errors.append(label)
+            if not self.approvals or any(not r.position.strip() or not r.person.strip() for r in self.approvals):errors.append('Лист согласования: должность и фамилия для каждой строки')
+            errors.extend(section_errors(self.sections))
+            if any(not p.strip() for p in self.appendices):errors.append('Названия приложений')
+            if self.edition>1 and (not self.changes_reviewed or not self.changes or any(not r.pages.strip() or not r.description.strip() for r in self.changes)):
+                errors.append('Лист регистрации изменений: подтвердите проверку и заполните страницы и описания')
+            return errors
         for key,label in {'number':'Номер СТУ','title':'Наименование СТУ','annotation':'Аннотация','purpose':'1 Назначение',
             'scope':'2 Область применения','references':'3 Нормативные ссылки',
             'owner':'Ответственный за стандарт','proposals_to':'Получатель предложений','changes_owner':'Ответственный за изменения'}.items():

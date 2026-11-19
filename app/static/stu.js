@@ -44,7 +44,10 @@ let body=section('Реквизиты СТУ',true),grid=el('div',undefined,{clas
 for(const [key,label,type] of [['number','Номер СТУ из реестра','text'],['title','Наименование СТУ','text'],['edition','Номер редакции','number'],['order_number','Номер приказа (можно оставить пустым)','text'],['order_date','Дата приказа (необязательно)','date'],['effective_date','Дата введения в действие (необязательно)','date']])field(grid,label,state,key,type);
 body=section('Лист согласования');body.append(el('p','Подпись и дата остаются пустыми в Word.'));
 repeat(body,'approvals',[['role','Ответственность',['Согласовал','Разработал']],['position','Должность','text'],['person','Фамилия, инициалы','text']],{role:'Разработал',position:'',person:''});
-for(const [key,label] of [['annotation','Аннотация'],['purpose','1 НАЗНАЧЕНИЕ'],['scope','2 ОБЛАСТЬ ПРИМЕНЕНИЯ'],['references','3 НОРМАТИВНЫЕ ССЫЛКИ']])field(section(label),label,state,key,'textarea');
+field(section('Аннотация'),'Аннотация',state,'annotation','textarea');
+if(state.mode==='free'){window.StuSections.render({state,parent:section('Разделы документа',true),el,button,field,changed});}
+else{
+for(const [key,label] of [['purpose','1 НАЗНАЧЕНИЕ'],['scope','2 ОБЛАСТЬ ПРИМЕНЕНИЯ'],['references','3 НОРМАТИВНЫЕ ССЫЛКИ']])field(section(label),label,state,key,'textarea');
 body=section('4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ');
 body.append(el('h3','Сокращения'));body.append(el('p','В Word: сокращение - расшифровка. При экспорте сокращения сортируются по алфавиту.'));
 repeat(body,'abbreviation_rows',[['name','Сокращение','text'],['meaning','Расшифровка','textarea']],{name:'',meaning:''});
@@ -73,6 +76,7 @@ const indicatorFields=[['name','Показатель'],['unit','Ед. изм.'],
 repeat(section('8 ПОКАЗАТЕЛИ ПРОЦЕССА'),'indicators',indicatorFields.map(([k,label])=>[k,label,'text']),Object.fromEntries(indicatorFields.map(([k])=>[k,''])));
 body=section('9 ВНЕСЕНИЕ ИЗМЕНЕНИЙ');field(body,'Кому передаются предложения',state,'proposals_to');field(body,'Кто вносит изменения совместно с менеджером СМК',state,'changes_owner');
 section('10 ХРАНЕНИЕ').append(el('p','Текст о хранении и сетевых ресурсах ККБ будет включён по согласованному образцу.'));
+}
 names(section('Приложения'),'appendices','Приложение');
 const changesSection=section('ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ');changesSection.append(el('p','Для редакций 2 и выше заполните изменения. Номер изменения присваивается автоматически, номер редакции берётся из реквизитов.'));
 repeat(changesSection,'changes',[['pages','Страница изменения','text'],['kind','Вид изменения',['Введено впервые','Измененная редакция','Исключено']],['description','Краткое описание','text']],{pages:'',kind:'Измененная редакция',description:''});

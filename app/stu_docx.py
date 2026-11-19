@@ -12,6 +12,7 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.text.paragraph import Paragraph
 from docx.table import Table
 from app.stu_schema import glossary_key
+from app.stu_sections import outline
 from docx.enum.section import WD_SECTION_START, WD_ORIENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -154,6 +155,15 @@ def generate(content):
   szcs=OxmlElement('w:szCs');szcs.set(qn('w:val'),'24');style.element.get_or_add_rPr().append(szcs)
   style.paragraph_format.first_line_indent=Cm(0)
  update=OxmlElement('w:updateFields');update.set(qn('w:val'),'true');d.settings.element.append(update)
+ if content.mode=='free':
+  if 'Heading 2' not in d.styles:
+   style=d.styles.add_style('Heading 2',WD_STYLE_TYPE.PARAGRAPH,builtin=True)
+   style.base_style=d.styles['Normal']
+  style=d.styles['Heading 2'];style.font.name='Arial';style.font.size=Pt(12);style.font.bold=True;style.font.color.rgb=RGBColor.from_string('000000')
+  style.paragraph_format.keep_with_next=True
+  props=style.element.get_or_add_pPr();outline_level=props.find(qn('w:outlineLvl'))
+  if outline_level is None:outline_level=OxmlElement('w:outlineLvl');props.append(outline_level)
+  outline_level.set(qn('w:val'),'1')
  def para(text='',align=None):
   p=d.add_paragraph()
   p.paragraph_format.space_after=Pt(6);p.paragraph_format.first_line_indent=Cm(1)
@@ -163,7 +173,7 @@ def generate(content):
  def paragraphs(text):
   for line in text.splitlines():para(line)
  def heading(text,level=1):
-  p=d.add_paragraph(style='Heading 1' if re.match(r'^\d+ ',text) or text.startswith('ПРИЛОЖЕНИЕ ') or text=='ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ' else None)
+  p=d.add_paragraph(style='Heading 2' if level==2 else 'Heading 1' if re.match(r'^\d+ ',text) or text.startswith('ПРИЛОЖЕНИЕ ') or text=='ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ' else None)
   p.paragraph_format.keep_with_next=True
   p.paragraph_format.first_line_indent=Cm(1);p.paragraph_format.left_indent=Cm(0)
   r=p.add_run(clean(text));r.bold=True;r.font.name='Arial';r.font.size=Pt(12)
@@ -218,80 +228,96 @@ def generate(content):
  headings=['1 НАЗНАЧЕНИЕ','2 ОБЛАСТЬ ПРИМЕНЕНИЯ','3 НОРМАТИВНЫЕ ССЫЛКИ','4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ','5 ОТВЕТСТВЕННОСТЬ','6 ОПИСАНИЕ ПРОЦЕССА']
  headings += [f'6.{i} {appendix_name(name)}' for i,name in enumerate(content.processes,1)]
  headings += ['7 ОЦЕНКА РИСКОВ','8 ПОКАЗАТЕЛИ ПРОЦЕССА','9 ВНЕСЕНИЕ ИЗМЕНЕНИЙ','10 ХРАНЕНИЕ']
+ if content.mode=='free':headings=[f'{number} {item.title}' for number,_,item in outline(content.sections)]
  headings += [f'ПРИЛОЖЕНИЕ {i}. {appendix_name(name)}' for i,name in enumerate(content.appendices,1)]
  if content.edition>1:headings.append('ЛИСТ РЕГИСТРАЦИИ ИЗМЕНЕНИЙ')
  headings.append('ВЕДОМОСТЬ ОБУЧЕНИЯ И ОЗНАКОМЛЕНИЯ СО СТАНДАРТОМ')
  for name in headings:
-  p=para(name,WD_ALIGN_PARAGRAPH.LEFT);p.style=next(style for style in d.styles if style.style_id=='TOC1');p.paragraph_format.first_line_indent=Cm(0)
+  p=para(name,WD_ALIGN_PARAGRAPH.LEFT);p.style=next(style for style in d.styles if style.style_id==('TOC2' if content.mode=='free' and re.match(r'^\d+\.\d+ ',name) else 'TOC1'));p.paragraph_format.first_line_indent=Cm(0)
  end=OxmlElement('w:fldChar');end.set(qn('w:fldCharType'),'end');p.add_run()._r.append(end)
  para('Обновите содержание в Word: щёлкните по содержанию и выберите «Обновить поле».')
  newpage()
- for title,key in [('1 НАЗНАЧЕНИЕ','purpose'),('2 ОБЛАСТЬ ПРИМЕНЕНИЯ','scope'),('3 НОРМАТИВНЫЕ ССЫЛКИ','references')]:
-  heading(title);paragraphs(getattr(content,key))
- heading('4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ')
- for row in sorted(content.abbreviation_rows,key=lambda row:glossary_key(row.name)):
-  para(f'{row.name.strip()} - {row.meaning.strip()}')
- if content.abbreviations.strip():paragraphs(content.abbreviations)
- for row in sorted(content.term_rows,key=lambda row:glossary_key(row.name)):
-  p=para();r=p.add_run(clean(row.name.strip()));r.bold=True;r.font.name='Arial';r.font.size=Pt(12)
-  r=p.add_run(clean(' - '+row.meaning.strip()));r.bold=False;r.font.name='Arial';r.font.size=Pt(12)
- heading('5 ОТВЕТСТВЕННОСТЬ')
- para(f'Ответственность за правильность разработки, внедрение и исполнение настоящего стандарта учреждения несет {content.owner}.')
- para('Ответственность за выполнение требований настоящего стандарта учреждения также возлагается на сотрудников подразделений в соответствии с таблицей 1 «Матрица ответственности».')
- if content.matrix_landscape:
-  sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.LANDSCAPE;sec.page_width,sec.page_height=Cm(29.7),Cm(21);sec.different_first_page_header_footer=False
- para('Таблица 1 — Матрица ответственности')
- t=table(['№\nп/п','Наименование подразделения',*['Должность']*len(content.positions)],
-  [[i,r.name,*['V' if x else '' for x in r.marks]] for i,r in enumerate(content.departments,1)],shade='D9D9D9',size=10,kind='matrix')
- row=second_header(t,['','',*content.positions])
- t.cell(0,0).merge(t.cell(1,0));t.cell(0,1).merge(t.cell(1,1))
- if len(content.positions)>1:t.cell(0,2).merge(t.cell(0,len(content.positions)+1)).text='Должность'
- row=t.add_row();row.cells[0].merge(row.cells[-1]).text='Сотрудники КГБУЗ ККБ должны знать и выполнять требования настоящего стандарта учреждения'
- if content.matrix_landscape:
-  sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.PORTRAIT;sec.page_width,sec.page_height=Cm(21),Cm(29.7);sec.different_first_page_header_footer=False
- heading('6 ОПИСАНИЕ ПРОЦЕССА')
- paragraphs(content.process_custom or f'Порядок {content.process_name} представлен в виде квалиграммы и текстового описания к ней.')
- for i,name in enumerate(content.processes,1):
-  newpage();t=table([''],[[''],[f'6.{i} {appendix_name(name)}'],['']],shade=None,size=24,kind='process')
-  t._tbl.remove(t.rows[0]._tr)
-  for row,height in zip(t.rows,[9.846,2.845,11.465]):row.height=Cm(height)
-  p=t.rows[1].cells[0].paragraphs[0];p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-  # A real heading in the middle cell is included in Word TOC.
-  ppr=p._p.get_or_add_pPr();o=OxmlElement('w:outlineLvl');o.set(qn('w:val'),'1');ppr.append(o)
-  graph=content.qualigrams.get(content.process_ids[i-1])
-  landscape=graph is not None and graph.orientation=='landscape'
-  if landscape:
+ if content.mode=='free':
+  table_number=0
+  for number,level,item in outline(content.sections):
+   heading(f'{number} {item.title}',level)
+   for block in item.blocks:
+    if block.kind=='text':paragraphs(block.text)
+    else:
+     table_number+=1
+     caption=para(f'Таблица {table_number}'+(' — '+block.title if block.title.strip() else ''),WD_ALIGN_PARAGRAPH.LEFT)
+     caption.paragraph_format.first_line_indent=Cm(0);caption.paragraph_format.keep_with_next=True
+     width=(d.sections[-1].page_width-d.sections[-1].left_margin-d.sections[-1].right_margin)/360000
+     t=table(block.headers,block.rows,shade=None,size=12,kind='free',widths=[width/len(block.headers)]*len(block.headers))
+     for row in t.rows:
+      for flag in list(row._tr.get_or_add_trPr().findall(qn('w:cantSplit'))):flag.getparent().remove(flag)
+ else:
+  for title,key in [('1 НАЗНАЧЕНИЕ','purpose'),('2 ОБЛАСТЬ ПРИМЕНЕНИЯ','scope'),('3 НОРМАТИВНЫЕ ССЫЛКИ','references')]:
+   heading(title);paragraphs(getattr(content,key))
+  heading('4 СОКРАЩЕНИЯ И ОБОЗНАЧЕНИЯ')
+  for row in sorted(content.abbreviation_rows,key=lambda row:glossary_key(row.name)):
+   para(f'{row.name.strip()} - {row.meaning.strip()}')
+  if content.abbreviations.strip():paragraphs(content.abbreviations)
+  for row in sorted(content.term_rows,key=lambda row:glossary_key(row.name)):
+   p=para();r=p.add_run(clean(row.name.strip()));r.bold=True;r.font.name='Arial';r.font.size=Pt(12)
+   r=p.add_run(clean(' - '+row.meaning.strip()));r.bold=False;r.font.name='Arial';r.font.size=Pt(12)
+  heading('5 ОТВЕТСТВЕННОСТЬ')
+  para(f'Ответственность за правильность разработки, внедрение и исполнение настоящего стандарта учреждения несет {content.owner}.')
+  para('Ответственность за выполнение требований настоящего стандарта учреждения также возлагается на сотрудников подразделений в соответствии с таблицей 1 «Матрица ответственности».')
+  if content.matrix_landscape:
    sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.LANDSCAPE;sec.page_width,sec.page_height=Cm(29.7),Cm(21);sec.different_first_page_header_footer=False
-  else:newpage()
-  para('Квалиграмма',WD_ALIGN_PARAGRAPH.LEFT)
-  if graph:
-   from app.qualigram_render import png
-   sec=d.sections[-1];available_w=sec.page_width-sec.left_margin-sec.right_margin
-   available_h=sec.page_height-sec.top_margin-sec.bottom_margin-Cm(1.8)
-   scale=min(available_w/graph.width,available_h/graph.height)
-   pic=d.add_paragraph();pic.paragraph_format.space_after=Pt(0)
-   pic.add_run().add_picture(BytesIO(png(graph,name)),width=int(graph.width*scale),height=int(graph.height*scale))
-  if landscape:
+  para('Таблица 1 — Матрица ответственности')
+  t=table(['№\nп/п','Наименование подразделения',*['Должность']*len(content.positions)],
+   [[i,r.name,*['V' if x else '' for x in r.marks]] for i,r in enumerate(content.departments,1)],shade='D9D9D9',size=10,kind='matrix')
+  row=second_header(t,['','',*content.positions])
+  t.cell(0,0).merge(t.cell(1,0));t.cell(0,1).merge(t.cell(1,1))
+  if len(content.positions)>1:t.cell(0,2).merge(t.cell(0,len(content.positions)+1)).text='Должность'
+  row=t.add_row();row.cells[0].merge(row.cells[-1]).text='Сотрудники КГБУЗ ККБ должны знать и выполнять требования настоящего стандарта учреждения'
+  if content.matrix_landscape:
    sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.PORTRAIT;sec.page_width,sec.page_height=Cm(21),Cm(29.7);sec.different_first_page_header_footer=False
-  else:newpage()
-  para('Текстовое описание к квалиграмме',WD_ALIGN_PARAGRAPH.LEFT)
-  if graph:paragraphs(graph.description)
- newpage();heading('7 ОЦЕНКА РИСКОВ')
- t=table(['Возможный прецедент','Риски','Риски','Ранг'],[[r.event,r.probability,r.impact,r.rank] for r in content.risks],kind='risk')
- second_header(t,['','Вероятность','Влияние','']);t.cell(0,0).merge(t.cell(1,0));t.cell(0,3).merge(t.cell(1,3));t.cell(0,1).merge(t.cell(0,2)).text='Риски'
- heading('8 ПОКАЗАТЕЛИ ПРОЦЕССА')
- t=table(['№',*[label for _,label in INDICATORS]],[[i,*[getattr(r,k) for k,_ in INDICATORS]] for i,r in enumerate(content.indicators,1)],size=10,kind='indicator',widths=INDICATOR_WIDTHS_CM)
- second_header(t,['','','','','','','Кто вносит','Что вносит','Куда вносит','Периодичность анализа','Ответственный'])
- for i in range(6):t.cell(0,i).merge(t.cell(1,i))
- t.cell(0,6).merge(t.cell(0,8)).text='Внесение данных';t.cell(0,9).merge(t.cell(0,10)).text='Проведение анализа данных для управления процессом'
- heading('9 ВНЕСЕНИЕ ИЗМЕНЕНИЙ')
- para(f'Предложения по внесению изменений в содержание настоящего стандарта может внести любой сотрудник. Предложения передаются {content.proposals_to}.')
- para(f'Внесение изменений в подлинник настоящего стандарта производит {content.changes_owner} совместно с менеджером ответственным за систему менеджмента качества.')
- heading('10 ХРАНЕНИЕ')
- for line in ['Подлинник настоящего стандарта хранится в отделе системе менеджмента качества.','Срок хранения подлинника – до минования надобности.',
- 'Электронная версия утвержденного стандарта располагается на сетевых ресурсах КГБУЗ ККБ:',
- '– www.medics.medgorod.ru//Портал/Обучение/База знаний (https://medics.medgorod.ru/components/edu/wiki);',
- '– Обмен// 4_ДОКУМЕНТЫ ККБ/1 СТАНДАРТЫ УЧРЕЖДЕНИЯ.']:para(line)
+  heading('6 ОПИСАНИЕ ПРОЦЕССА')
+  paragraphs(content.process_custom or f'Порядок {content.process_name} представлен в виде квалиграммы и текстового описания к ней.')
+  for i,name in enumerate(content.processes,1):
+   newpage();t=table([''],[[''],[f'6.{i} {appendix_name(name)}'],['']],shade=None,size=24,kind='process')
+   t._tbl.remove(t.rows[0]._tr)
+   for row,height in zip(t.rows,[9.846,2.845,11.465]):row.height=Cm(height)
+   p=t.rows[1].cells[0].paragraphs[0];p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+   # A real heading in the middle cell is included in Word TOC.
+   ppr=p._p.get_or_add_pPr();o=OxmlElement('w:outlineLvl');o.set(qn('w:val'),'1');ppr.append(o)
+   graph=content.qualigrams.get(content.process_ids[i-1])
+   landscape=graph is not None and graph.orientation=='landscape'
+   if landscape:
+    sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.LANDSCAPE;sec.page_width,sec.page_height=Cm(29.7),Cm(21);sec.different_first_page_header_footer=False
+   else:newpage()
+   para('Квалиграмма',WD_ALIGN_PARAGRAPH.LEFT)
+   if graph:
+    from app.qualigram_render import png
+    sec=d.sections[-1];available_w=sec.page_width-sec.left_margin-sec.right_margin
+    available_h=sec.page_height-sec.top_margin-sec.bottom_margin-Cm(1.8)
+    scale=min(available_w/graph.width,available_h/graph.height)
+    pic=d.add_paragraph();pic.paragraph_format.space_after=Pt(0)
+    pic.add_run().add_picture(BytesIO(png(graph,name)),width=int(graph.width*scale),height=int(graph.height*scale))
+   if landscape:
+    sec=d.add_section(WD_SECTION_START.NEW_PAGE);sec.orientation=WD_ORIENT.PORTRAIT;sec.page_width,sec.page_height=Cm(21),Cm(29.7);sec.different_first_page_header_footer=False
+   else:newpage()
+   para('Текстовое описание к квалиграмме',WD_ALIGN_PARAGRAPH.LEFT)
+   if graph:paragraphs(graph.description)
+  newpage();heading('7 ОЦЕНКА РИСКОВ')
+  t=table(['Возможный прецедент','Риски','Риски','Ранг'],[[r.event,r.probability,r.impact,r.rank] for r in content.risks],kind='risk')
+  second_header(t,['','Вероятность','Влияние','']);t.cell(0,0).merge(t.cell(1,0));t.cell(0,3).merge(t.cell(1,3));t.cell(0,1).merge(t.cell(0,2)).text='Риски'
+  heading('8 ПОКАЗАТЕЛИ ПРОЦЕССА')
+  t=table(['№',*[label for _,label in INDICATORS]],[[i,*[getattr(r,k) for k,_ in INDICATORS]] for i,r in enumerate(content.indicators,1)],size=10,kind='indicator',widths=INDICATOR_WIDTHS_CM)
+  second_header(t,['','','','','','','Кто вносит','Что вносит','Куда вносит','Периодичность анализа','Ответственный'])
+  for i in range(6):t.cell(0,i).merge(t.cell(1,i))
+  t.cell(0,6).merge(t.cell(0,8)).text='Внесение данных';t.cell(0,9).merge(t.cell(0,10)).text='Проведение анализа данных для управления процессом'
+  heading('9 ВНЕСЕНИЕ ИЗМЕНЕНИЙ')
+  para(f'Предложения по внесению изменений в содержание настоящего стандарта может внести любой сотрудник. Предложения передаются {content.proposals_to}.')
+  para(f'Внесение изменений в подлинник настоящего стандарта производит {content.changes_owner} совместно с менеджером ответственным за систему менеджмента качества.')
+  heading('10 ХРАНЕНИЕ')
+  for line in ['Подлинник настоящего стандарта хранится в отделе системе менеджмента качества.','Срок хранения подлинника – до минования надобности.',
+  'Электронная версия утвержденного стандарта располагается на сетевых ресурсах КГБУЗ ККБ:',
+  '– www.medics.medgorod.ru//Портал/Обучение/База знаний (https://medics.medgorod.ru/components/edu/wiki);',
+  '– Обмен// 4_ДОКУМЕНТЫ ККБ/1 СТАНДАРТЫ УЧРЕЖДЕНИЯ.']:para(line)
  for i,name in enumerate(content.appendices,1):
   newpage();p=heading(f'ПРИЛОЖЕНИЕ {i}');p.alignment=WD_ALIGN_PARAGRAPH.CENTER
   p.paragraph_format.first_line_indent=Cm(0);p.paragraph_format.left_indent=Cm(0);p.paragraph_format.right_indent=Cm(0)
@@ -340,11 +366,11 @@ def generate(content):
     color='F2F2F2' if process and ri==1 else item['shade'] if not process and ri<item['headers'] else None
     if color:
      shade=OxmlElement('w:shd');shade.set(qn('w:fill'),color);pr.append(shade)
-    if item['kind'] in ['approval','matrix','process','risk','indicator']:cell.vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    if item['kind'] in ['approval','matrix','process','risk','indicator','free']:cell.vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER
     for p in cell.paragraphs:
      p.paragraph_format.space_after=Pt(1);p.paragraph_format.space_before=Pt(1);p.paragraph_format.line_spacing=1;p.paragraph_format.first_line_indent=Cm(0)
-     if item['kind'] in ['approval','matrix','process','risk','indicator']:
-      p.alignment=WD_ALIGN_PARAGRAPH.LEFT if item['kind']=='risk' and ri>=item['headers'] and cell._tc is row.cells[0]._tc else WD_ALIGN_PARAGRAPH.CENTER
+     if item['kind'] in ['approval','matrix','process','risk','indicator','free']:
+      p.alignment=WD_ALIGN_PARAGRAPH.LEFT if item['kind']=='free' else WD_ALIGN_PARAGRAPH.LEFT if item['kind']=='risk' and ri>=item['headers'] and cell._tc is row.cells[0]._tc else WD_ALIGN_PARAGRAPH.CENTER
      for r in p.runs:r.font.name='Arial';r.font.size=Pt(item['size']);r.bold=not process and ri<item['headers']
  # Write borders on physical continuation cells too; python-docx row.cells
  # aliases vertical merges to their origin and otherwise leaves gaps in the frame.

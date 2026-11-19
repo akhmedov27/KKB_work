@@ -1,5 +1,7 @@
 import json
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Form
+from typing import Literal
+from app.stu_sections import template_sections
 from fastapi.responses import RedirectResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import select, update
@@ -20,11 +22,12 @@ def make_router(sessions,render):
   if not 1<=page<=1000000:raise HTTPException(400,'Некорректная страница.')
   with sessions() as db:
    rows=db.scalars(select(StuDraft).order_by(StuDraft.updated_at.desc(),StuDraft.id.desc()).offset((page-1)*50).limit(51)).all()
-  return render(request,'stu_list.html',active='stu',title='Конструктор СТУ',drafts=rows[:50],page=page,has_more=len(rows)>50)
+  return render(request,'stu_list.html',active='stu',title='Конструктор СТУ',drafts=rows[:50],modes={row.id:json.loads(row.payload_json).get('mode','standard') for row in rows[:50]},page=page,has_more=len(rows)>50)
  @router.post('/stu')
- def create():
+ def create(mode:Literal['standard','free']=Form('standard'),base:Literal['empty','kkb']=Form('empty')):
+  content=StuContent(mode=mode,sections=template_sections() if mode=='free' and base=='kkb' else [])
   with sessions.begin() as db:
-   row=StuDraft(payload_json=StuContent().model_dump_json());db.add(row);db.flush();id=row.id
+   row=StuDraft(payload_json=content.model_dump_json());db.add(row);db.flush();id=row.id
   return RedirectResponse(f'/stu/{id}',303)
  @router.get('/stu/{id}')
  def editor(request:Request,id:int):
@@ -38,7 +41,7 @@ def make_router(sessions,render):
    data=json.loads(body);version=data['version']
    if type(version) is not int or version<1:raise ValueError()
    content=StuContent.model_validate(data['content'])
-  except (ValueError,KeyError,TypeError,ValidationError):raise HTTPException(400,'Проверьте длину полей, структуру матрицы и значения от 1 до 5.') from None
+  except (ValueError,KeyError,TypeError,ValidationError):raise HTTPException(400,'Проверьте длину полей, структуру разделов и таблиц, а также значения от 1 до 5.') from None
   with sessions.begin() as db:
    get(db,id)
    result=db.execute(update(StuDraft).where(StuDraft.id==id,StuDraft.version==version).values(title=content.title.strip() or 'Новый СТУ',payload_json=content.model_dump_json(),version=version+1,updated_at=now()))

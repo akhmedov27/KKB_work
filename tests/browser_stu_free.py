@@ -1,0 +1,80 @@
+"""Creates only synthetic drafts on an isolated test server."""
+import os,json
+from pathlib import Path
+from playwright.sync_api import sync_playwright,expect
+url=os.environ['QMS_TEST_URL']
+with sync_playwright() as p:
+ browser=p.chromium.launch(headless=True,executable_path=os.environ.get('QMS_CHROMIUM_PATH'))
+ page=browser.new_page(viewport={'width':1500,'height':1000});errors=[];external=[]
+ page.on('pageerror',lambda e:errors.append(str(e)))
+ page.on('request',lambda r:external.append(r.url) if r.url.startswith(('http://','https://')) and not r.url.startswith(url) else None)
+ page.goto(url+'/modules/stu');page.locator('#stu-base').select_option('empty')
+ page.get_by_role('button',name='Создать свободный СТУ',exact=True).click();editor=page.url
+ expect(page.locator('#stu-sections')).to_be_visible()
+ page.get_by_label('Номер СТУ из реестра',exact=True).fill('СВОБ-1')
+ page.get_by_label('Наименование СТУ',exact=True).fill('Проверка свободной структуры')
+ page.locator('summary').get_by_text('Лист согласования',exact=True).click()
+ approval=page.locator('details').filter(has=page.locator('summary').get_by_text('Лист согласования',exact=True))
+ approval.get_by_role('button',name='Добавить строку',exact=True).click()
+ approval.get_by_label('Должность',exact=True).fill('Специалист')
+ approval.get_by_label('Фамилия, инициалы',exact=True).fill('Тестов Т. Т.')
+ page.locator('summary').get_by_text('Аннотация',exact=True).click();page.get_by_label('Аннотация',exact=True).fill('Синтетический стандарт.')
+ page.get_by_role('button',name='Добавить раздел',exact=True).click()
+ page.get_by_label('Название раздела 1',exact=True).fill('Область применения')
+ page.get_by_label('Текст раздела 1, блок 1',exact=True).fill('Текст области применения.')
+ first=page.locator('#stu-sections>details').first;first_id=first.get_attribute('data-section-id')
+ first.get_by_role('button',name='Добавить подраздел',exact=True).click()
+ page.get_by_label('Название подраздела 1.1',exact=True).fill('Подраздел')
+ page.get_by_label('Текст раздела 1.1, блок 1',exact=True).fill('Текст подраздела.')
+ first.get_by_role('button',name='Добавить таблицу',exact=True).first.click()
+ page.get_by_label('Название таблицы (необязательно)',exact=True).fill('Ответственные')
+ page.get_by_label('Заголовок столбца 1 таблицы в блоке 2 раздела 1',exact=True).fill('Участник')
+ page.get_by_label('Заголовок столбца 2 таблицы в блоке 2 раздела 1',exact=True).fill('Действие')
+ page.get_by_label('Ячейка 1, 1 таблицы в блоке 2 раздела 1',exact=True).fill('Специалист')
+ page.get_by_label('Ячейка 1, 2 таблицы в блоке 2 раздела 1',exact=True).fill('Проверить запись')
+ first.get_by_role('button',name='Столбец 2 влево',exact=True).click()
+ expect(page.get_by_label('Заголовок столбца 1 таблицы в блоке 2 раздела 1',exact=True)).to_have_value('Действие')
+ expect(page.get_by_label('Ячейка 1, 1 таблицы в блоке 2 раздела 1',exact=True)).to_have_value('Проверить запись')
+ table_block=first.locator('[data-block-id]').filter(has=page.get_by_label('Название таблицы (необязательно)',exact=True))
+ table_id=table_block.get_attribute('data-block-id')
+ table_block.get_by_role('button',name='Блок вверх',exact=True).click()
+ assert first.locator('[data-block-id]').first.get_attribute('data-block-id')==table_id
+ table_block=first.locator('[data-block-id]').first
+ table_block.get_by_role('button',name='Блок вниз',exact=True).click()
+ expect(page.get_by_label('Текст раздела 1, блок 1',exact=True)).to_have_value('Текст области применения.')
+ expect(page.get_by_label('Ячейка 1, 1 таблицы в блоке 2 раздела 1',exact=True)).to_have_value('Проверить запись')
+ page.get_by_role('button',name='Добавить раздел',exact=True).click()
+ page.get_by_label('Название раздела 2',exact=True).fill('Назначение')
+ page.get_by_label('Текст раздела 2, блок 1',exact=True).fill('Вводные данные.')
+ second=page.locator('#stu-sections>details').nth(1);second.get_by_role('button',name='Раздел вверх',exact=True).click()
+ expect(page.get_by_label('Название раздела 1',exact=True)).to_have_value('Назначение')
+ assert page.locator('#stu-sections>details').nth(1).get_attribute('data-section-id')==first_id
+ page.get_by_role('button',name='Добавить раздел',exact=True).click();page.get_by_label('Название раздела 3',exact=True).fill('Удаляемый')
+ page.once('dialog',lambda d:d.accept());page.locator('#stu-sections>details').nth(2).get_by_role('button',name='Удалить раздел',exact=True).click()
+ expect(page.locator('#stu-sections>details')).to_have_count(2)
+ page.locator('#stu-save').click();expect(page.locator('#stu-status')).to_have_text('Черновик сохранён');expect(page.locator('#stu-errors li')).to_have_count(0)
+ with page.expect_download() as pending:page.locator('#stu-export').click()
+ pending.value.save_as('/tmp/stu-free-browser.docx')
+ page.reload();expect(page.locator('#stu-sections>details>summary').first).to_have_text('1 Назначение')
+ assert json.loads(page.locator('#stu-data').text_content())['content']['mode']=='free'
+ first=page.locator('#stu-sections>details').nth(1);first.locator('summary').click()
+ expect(page.get_by_label('Название подраздела 2.1',exact=True)).to_have_value('Подраздел')
+ expect(page.get_by_label('Ячейка 1, 1 таблицы в блоке 2 раздела 2',exact=True)).to_have_value('Проверить запись')
+ # Add a second child and reorder children; content follows their stable IDs.
+ first.get_by_role('button',name='Добавить подраздел',exact=True).click()
+ page.get_by_label('Название подраздела 2.2',exact=True).fill('Второй подраздел')
+ page.get_by_label('Текст раздела 2.2, блок 1',exact=True).fill('Дополнительный текст.')
+ page.locator('[data-subsection-id]').nth(1).get_by_role('button',name='Подраздел вверх',exact=True).click()
+ expect(page.get_by_label('Название подраздела 2.1',exact=True)).to_have_value('Второй подраздел')
+ expect(page.get_by_label('Текст раздела 2.1, блок 1',exact=True)).to_have_value('Дополнительный текст.')
+ page.locator('#stu-save').click();expect(page.locator('#stu-status')).to_have_text('Черновик сохранён')
+ page.screenshot(path='/tmp/stu-free-editor.png',full_page=True)
+ page.locator('#theme').click();page.set_viewport_size({'width':390,'height':850})
+ assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+ page.goto(url+'/modules/stu');page.locator('#stu-base').select_option('kkb');page.get_by_role('button',name='Создать свободный СТУ',exact=True).click()
+ expect(page.locator('#stu-sections>details')).to_have_count(10)
+ page.goto(url+'/modules/stu');page.get_by_role('button',name='Создать СТУ по шаблону ККБ',exact=True).click()
+ expect(page.locator('#stu-sections')).to_have_count(0);expect(page.locator('#stu-form>details')).to_have_count(16)
+ assert not errors,errors
+ assert not external,external
+ browser.close();print('PASS: mode choices, common sheets, sections/subsections, text/table edits, column/section/child moves, delete, reload, DOCX, dark/mobile and standard mode')
