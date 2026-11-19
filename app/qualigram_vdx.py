@@ -45,7 +45,7 @@ def vdx(graph,title=''):
    if kind=='document':points=[(0,0),(w,0),(w,h-.12),(w-.12,h),(0,h),(0,0)]
    for i,(px,py) in enumerate(points,1):
     p=child(g,'MoveTo' if i==1 else 'LineTo',IX=i);child(p,'X',px);child(p,'Y',py)
- def text(shape,value,size,color='#111111',align=1,bold=False):
+ def text(shape,value,size,color='#111111',align=1,bold=False,compact=False):
   # VDX 2003 character cells form an ordered sequence. Visio rejects a
   # Color after Size (LibreOffice's importer silently tolerates this).
   c=child(shape,'Char',IX=0)
@@ -59,7 +59,7 @@ def vdx(graph,title=''):
                     ('HorzAlign',align),('Bullet',0),('BulletStr',''),('BulletFont',0),('LocalizeBulletFont',0),
                     ('BulletFontSize',-1),('TextPosAfterBullet',0),('Flags',0)]:child(p,key,cell_value)
   block=child(shape,'TextBlock')
-  for key,value2 in [('LeftMargin',.06),('RightMargin',.06),('TopMargin',.04),('BottomMargin',.04),('VerticalAlign',1),('TextBkgnd',0),('DefaultTabStop',.5),('TextDirection',0),('TextBkgndTrans',0)]:child(block,key,value2)
+  for key,value2 in [('LeftMargin',.01 if compact else .06),('RightMargin',.01 if compact else .06),('TopMargin',.01 if compact else .04),('BottomMargin',.01 if compact else .04),('VerticalAlign',1),('TextBkgnd',0),('DefaultTabStop',.5),('TextDirection',0),('TextBkgndTrans',0)]:child(block,key,value2)
   child(shape,'Text',value)
  def rect(parent,x,y,w,h,value='',fill='#FFFFFF',font=16,bold=False,kind='rect',line='#111111',rounding=0):
   shape=child(parent,'Shape',ID=ident(),Type='Shape');xform(shape,(x+w/2)*scale,page_height-(y+h/2)*scale,w*scale,h*scale)
@@ -78,11 +78,11 @@ def vdx(graph,title=''):
   node_ids[node.id]=group.get('ID');xform(group,(node.x+node.width/2)*scale,page_height-(node.y+node.height/2)*scale,w,h)
   for i,(x,y,fx,fy) in enumerate([(w/2,h,'Width*0.5','Height'),(w,h/2,'Width','Height*0.5'),(w/2,0,'Width*0.5','0'),(0,h/2,'0','Height*0.5')]):
    c=child(group,'Connection',ID=i);child(c,'X',x,F=fx);child(c,'Y',y,F=fy);child(c,'DirX',0);child(c,'DirY',0);child(c,'Type',0)
-  text(group,node.text,node.font_size*scale,color='#FFFFFF' if node.kind=='date' else '#111111',align=0 if node.kind in ('action','note','document') else 1)
+  text(group,node.text,node.font_size*scale,color='#FFFFFF' if node.kind=='date' else '#111111',align=0 if node.kind in ('action','note','document') else 1,compact=node.kind in ('and','or'))
   members=child(group,'Shapes')
   body=child(members,'Shape',ID=ident(),Type='Shape');xform(body,w/2,h/2,w,h)
-  appearance(body,FILLS[node.kind],'#E88900' if node.kind in ('note','document') else '#111111',pattern=2 if node.kind=='note' else 1,rounding=.12 if node.kind in ('dept_in','dept_out','department','note','date','and','or') else 0)
-  geometry(body,w,h,'ellipse' if node.kind in ('start','end','number') else 'document' if node.kind=='document' else 'rect')
+  appearance(body,FILLS[node.kind],'#E88900' if node.kind in ('note','document') else '#111111',pattern=2 if node.kind=='note' else 1,rounding=min(w,h)/2 if node.kind in ('dept_in','dept_out','department','or') else .12 if node.kind in ('note','date') else 0)
+  geometry(body,w,h,'ellipse' if node.kind in ('start','end','number','and') else 'document' if node.kind=='document' else 'rect')
   for x,label in role_badges(graph,node):
    badge=child(members,'Shape',ID=ident(),Type='Shape');xform(badge,x*scale,h+scale,56*scale,24*scale)
    appearance(badge,rounding=.08);geometry(badge,56*scale,24*scale);text(badge,label,16*scale)

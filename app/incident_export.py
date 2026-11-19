@@ -9,6 +9,7 @@ from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from sqlalchemy import select
 from app.models import IncidentStagedRow
 from app.incident_stats import DIMENSIONS
+from app.incident_analytics import group_monthly
 
 
 def append(sheet, row):
@@ -103,6 +104,10 @@ def statistics_export(db, batch, upload, filters, stats, rows):
         chart.add_data(Reference(monthly, min_col=2, min_row=1, max_row=monthly.max_row), titles_from_data=True)
         chart.set_categories(Reference(monthly, min_col=1, min_row=2, max_row=monthly.max_row))
         monthly.add_chart(chart, 'D2')
+    group_month_sheet=workbook.create_sheet('Группы по месяцам')
+    append(group_month_sheet,['Группа событий (пусто — не указана)','Месяц','Количество'])
+    for item in group_monthly(db,batch.id,filters):
+        append(group_month_sheet,[item['value'],item['month'],item['count']])
     quarter_sheet = workbook.create_sheet('Кварталы')
     append(quarter_sheet, ['Квартал', 'Количество'])
     for item in stats['quarters']:

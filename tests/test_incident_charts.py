@@ -24,10 +24,11 @@ def test_chart_counts_and_drilldowns_share_filter_denominators(dataset):
             ('departments','ГХО'),('departments','ОАР2'),('exclude_statuses','Удалено')]
     data=payload(client,params)
     charts={chart['id']:chart for chart in data['charts']}
-    assert len(charts)==8
+    assert len(charts)==11
     assert sum(row['values'][0] for row in charts['departments']['rows'])==2
     assert sum(sum(row['values']) for row in charts['heat-month']['rows'])==2
     assert sum(sum(row['values']) for row in charts['heat-group']['rows'])==2
+    assert sum(sum(row['values']) for row in charts['heat-group-month']['rows'])==2
     for chart in data['charts']:
         for row in chart['rows']:
             for i,href in enumerate(row.get('hrefs',[])):
@@ -93,6 +94,9 @@ def test_bounded_axes_status_remainder_and_empty_charts(dataset):
     assert len(charts['departments']['rows'])==15
     assert len(charts['heat-month']['columns'])<=24
     assert len(charts['heat-group']['columns'])==12
+    assert len(charts['heat-group-month']['rows'])==12
+    assert len(charts['heat-group-month']['columns'])<=24
+    assert len(charts['quarters']['rows'])<=40
     assert len(charts['statuses']['series'])==9
     totals={row['label']:row['values'][0] for row in charts['departments']['rows']}
     assert all(sum(row['values'])==totals[row['label']] for row in charts['statuses']['rows'])
@@ -107,3 +111,45 @@ def test_snapshot_chart_categories_and_navigation():
     assert [row['values'] for row in chart['rows']]==[[3],[2],[4],[10]]
     for row,key in zip(chart['rows'],result['counts']):
         assert parse_qs(urlsplit(row['hrefs'][0]).query)=={'before_id':['11'],'after_id':['12'],'kind':[key]}
+
+
+def test_group_month_filters_zero_cells_partial_dates_and_complete_excel(dataset):
+ from io import BytesIO
+ from openpyxl import load_workbook
+ client,engine,batch=dataset
+ with Session(engine) as db:
+  records=db.scalars(select(IncidentRecord).where(IncidentRecord.batch_id==batch).order_by(IncidentRecord.id)).all()
+  records[0].group_name='безопасность' # Case variants must share the same row.
+  records[6].group_name='Не указано'   # Literal label differs from an empty value.
+  records[8].group_name=''
+  db.commit()
+ params={'batch_id':batch,'date_from':'2026-01-02','date_to':'2026-04-06','exclude_statuses':'Удалено'}
+ charts={c['id']:c for c in payload(client,params)['charts']}
+ heat=charts['heat-group-month']
+ assert heat['columns']==['2026-01','2026-02','2026-03','2026-04']
+ assert sum(sum(r['values']) for r in heat['rows'])==4
+ assert all(row['values'][1:3]==[0,0] for row in heat['rows'])
+ for row in heat['rows']:
+  for i,href in enumerate(row['hrefs']):
+   q=parse_qs(urlsplit(href).query)
+   assert q['exclude_statuses']==['Удалено']
+   if i==0:assert q['date_from']==['2026-01-02']
+   if i==3:assert q['date_to']==['2026-04-06']
+   assert int(re.search(r'id="incident-total">(\d+)<',client.get(href).text)[1])==row['values'][i]
+ page=client.get('/modules/incidents',params={'batch_id':batch}).text
+ link=html.unescape(re.search(r'href="([^"]+)" id="incident-export"',page)[1])
+ book=load_workbook(BytesIO(client.get(link).content));sheet=book['Группы по месяцам']
+ rows=list(sheet.values)[1:];assert sum(r[2] for r in rows)==9
+ assert any(r[0] is None for r in rows) and any(r[0]=='Не указано' for r in rows)
+ assert len(charts['heat-group-month']['rows'])<=12
+
+
+def test_quarter_and_group_comparison_links(dataset):
+ client,_,batch=dataset
+ charts={c['id']:c for c in payload(client,{'batch_id':batch,'date_from':'2026-01-02','date_to':'2026-04-06','compare_from':'2025-01-01','compare_to':'2025-12-31'})['charts']}
+ assert sum(r['values'][0] for r in charts['quarters']['rows'])==5
+ assert sum(r['values'][1] for r in charts['group-periods']['rows'])==2
+ for key in ['quarters','group-periods']:
+  for row in charts[key]['rows']:
+   for i,href in enumerate(row['hrefs']):
+    assert int(re.search(r'id="incident-total">(\d+)<',client.get(href).text)[1])==row['values'][i]

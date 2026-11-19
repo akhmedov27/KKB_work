@@ -28,6 +28,21 @@ with sync_playwright() as p:
  for label,suffix in [('PNG','.png'),('Visio 2007 · VDX','.vdx')]:
   with page.expect_download() as download:page.get_by_role('button',name=label,exact=True).click()
   assert download.value.suggested_filename.endswith(suffix)
+ # Compact palette and explicit resizing of already enlarged symbols.
+ for label,w,h in [('И',24,24),('ИЛИ',46,20),('Внешний отдел',150,47),('Отдел — вход',150,47),('Отдел — выход',150,47)]:
+  page.locator('#q-palette').get_by_role('button',name=label,exact=True).click()
+  expect(page.get_by_label('Ширина',exact=True)).to_have_value(str(w))
+  expect(page.get_by_label('Высота',exact=True)).to_have_value(str(h))
+  expect(page.locator('#q-paper [data-node-id]')).to_have_count(1+(['И','ИЛИ','Внешний отдел','Отдел — вход','Отдел — выход'].index(label)+1))
+ page.get_by_label('Ширина',exact=True).fill('300');page.get_by_label('Ширина',exact=True).press('Tab')
+ page.once('dialog',lambda dialog:dialog.accept())
+ page.get_by_role('button',name='Применить размеры образца',exact=True).click()
+ expect(page.get_by_label('Ширина',exact=True)).to_have_value('150')
+ page.get_by_role('button',name='Сохранить схему',exact=True).click();expect(page.locator('#q-status')).to_have_text('Схема сохранена')
+ page.reload();expect(page.locator('#q-paper [data-node-id]')).to_have_count(6)
+ assert page.locator('#q-paper [data-node-id]').nth(1).locator('ellipse').count()==1
+ for label in ['PNG','Visio 2007 · VDX']:
+  with page.expect_download():page.get_by_role('button',name=label,exact=True).click()
  page.screenshot(path='/tmp/qualigram-editor.png',full_page=True)
  page.set_viewport_size({'width':390,'height':850});assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
  assert not errors,errors

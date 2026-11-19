@@ -56,7 +56,7 @@ def make_router(sessions,render):
   if errors:raise HTTPException(400,'Заполните перед экспортом: '+'; '.join(errors))
   result=await run_in_threadpool(generate,content)
   return Response(result,media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',headers={'Content-Disposition':'attachment; filename="stu.docx"'})
- from app.qualigram_model import Qualigram
+ from app.qualigram_model import Qualigram, NODE_PRESETS
  from app.qualigram_render import svg, png, layout_errors, needed_height
  from app.qualigram_vdx import vdx
  def graph_content(db,id,pid):
@@ -66,7 +66,7 @@ def make_router(sessions,render):
  @router.get('/stu/{id}/qualigrams/{pid}')
  def graph_editor(request:Request,id:int,pid:str):
   with sessions() as db:row,content=graph_content(db,id,pid)
-  return render(request,'qualigram_editor.html',active='stu',title='Конструктор квалиграмм',initial={'id':id,'pid':pid,'version':row.version,'title':content.processes[content.process_ids.index(pid)],'diagram':content.qualigrams.get(pid,Qualigram()).model_dump(mode='json')})
+  return render(request,'qualigram_editor.html',active='stu',title='Конструктор квалиграмм',initial={'id':id,'pid':pid,'presets':NODE_PRESETS,'version':row.version,'title':content.processes[content.process_ids.index(pid)],'diagram':content.qualigrams.get(pid,Qualigram()).model_dump(mode='json')})
  @router.post('/stu/{id}/qualigrams/{pid}/preview')
  async def graph_preview(request:Request,id:int,pid:str):
   with sessions() as db:graph_content(db,id,pid)

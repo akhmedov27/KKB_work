@@ -9,6 +9,14 @@ KINDS={'action':'Действие','start':'Начало процесса','end'
        'and':'И','or':'ИЛИ','note':'Пояснение','document':'Документ','date':'Дата','number':'Номер'}
 EDGE_KINDS={'information':'Информация','defect':'Брак','risk':'Высокий риск'}
 
+# Original Visio palette: И 0.397 cm circle, ИЛИ 0.796 x 0.318 cm,
+# departments 2.6 x 0.818 cm. A4 canvas is approximately 57.14 units/cm.
+NODE_PRESETS={
+ 'and':{'width':24,'height':24,'font_size':16},
+ 'or':{'width':46,'height':20,'font_size':12},
+ **{kind:{'width':150,'height':47,'font_size':16} for kind in ('department','dept_in','dept_out')},
+}
+
 class Model(BaseModel):
  model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
 
@@ -22,8 +30,8 @@ class Node(Model):
  text:Annotated[str,StringConstraints(max_length=2000)]=''
  x:float=Field(default=40,ge=20,le=1657)
  y:float=Field(default=160,ge=140,le=1657)
- width:float=Field(default=180,ge=40,le=1657)
- height:float=Field(default=90,ge=24,le=1517)
+ width:float=Field(default=180,ge=16,le=1657)
+ height:float=Field(default=90,ge=16,le=1517)
  lanes:list[ID]=Field(default_factory=list,max_length=5)
  responsible:ID|None=None
  number:int|None=Field(default=None,ge=1,le=9999)

@@ -4,6 +4,7 @@ from datetime import date
 from urllib.parse import urlencode
 from sqlalchemy import func, select
 from app.models import IncidentRecord
+from app.incident_analytics import group_monthly
 from app.incident_stats import conditions, DIMENSIONS
 
 
@@ -46,6 +47,20 @@ def chart_data(db, batch_id, filters, stats):
                    'rows': [{'label': row['label'], 'values': [month_counts.get((row['value'].casefold(), month), 0) for month in months],
                              'hrefs': [month_link(month, departments=[value(row['value'])], department='') for month in months]} for row in departments]})
     groups = stats['groups']['group_name'][:12]
+    monthly_groups={(row['value'].casefold(),row['month']):row['count'] for row in group_monthly(db,batch_id,filters)}
+    charts.append({'id':'heat-group-month','title':'Группа событий × месяц','type':'heat','columns':months,
+                   'note':'Первые 12 групп по количеству × последние 24 месяца. Цвет показывает количество. Ноль — отсутствие записей в наборе. Полные данные — в Excel на листе «Группы по месяцам».',
+                   'rows':[{'label':row['label'],'values':[monthly_groups.get((row['value'].casefold(),month),0) for month in months],
+                            'hrefs':[month_link(month,group_name=value(row['value'])) for month in months]} for row in groups]})
+    quarter_rows=[]
+    for row in stats['quarters'][-40:]:
+        year=int(row['label'].split(' · ')[0]);quarter=int(row['label'].split(' · ')[1][0]);first=(quarter-1)*3+1;last=first+2
+        start=date(year,first,1);end=date(year,last,monthrange(year,last)[1])
+        start=max(start,filters.date_from) if filters.date_from else start
+        end=min(end,filters.date_to) if filters.date_to else end
+        quarter_rows.append({'label':row['label'],'values':[row['count']],'hrefs':[link(date_from=start.isoformat(),date_to=end.isoformat())]})
+    charts.append({'id':'quarters','title':'Динамика по кварталам','type':'bars','series':['Количество'],'rows':quarter_rows,
+                   'note':'Последние 40 кварталов текущей выборки. Неполный квартал ограничен выбранными датами; количества без нормирования на длительность.'})
     # SQL groups raw empty values separately from literal "Не указано" labels.
     cross_raw = db.execute(select(func.qms_casefold(IncidentRecord.department), func.qms_casefold(IncidentRecord.group_name), func.count())
                            .where(*where).group_by(func.qms_casefold(IncidentRecord.department), func.qms_casefold(IncidentRecord.group_name))).all()
@@ -80,6 +95,12 @@ def chart_data(db, batch_id, filters, stats):
                              'hrefs': [link(departments=[value(row['value'])], department=''),
                                        link(departments=[value(row['value'])], department='', date_from=filters.compare_from.isoformat(), date_to=filters.compare_to.isoformat())]}
                             for row in comparison]})
+    charts.append({'id':'group-periods','title':'Сравнение групп событий за два периода','type':'bars',
+                   'series':['Текущий период','Второй период'],
+                   'note':f"Второй период: {filters.compare_from} — {filters.compare_to}. Первые 15 групп по абсолютному изменению; количества без нормирования на длительность." if filters.compare_from else 'Задайте обе даты второго периода в фильтрах.',
+                   'rows':[{'label':row['label'],'values':[row['current'],row['previous']],
+                            'hrefs':[link(group_name=value(row['value'])),link(group_name=value(row['value']),date_from=filters.compare_from.isoformat(),date_to=filters.compare_to.isoformat())]}
+                           for row in stats['group_comparison'][:15]]})
     charts.append({'id': 'quality', 'title': 'Заполненность данных', 'type': 'stack',
                    'note': 'Проверяется только наличие значения. Доля считается от всех записей текущей выборки.',
                    'series': ['Заполнено', 'Не указано'],

@@ -112,3 +112,29 @@ def test_vdx_2003_ordered_sections_against_saved_visio_contract(orientation):
  # It is insufficient to move Color: the trailing character cells must exist too.
  char=root.find('.//v:Char',{'v':NS});char.remove(char.find('v:DblUnderline',{'v':NS}))
  assert not schema.validate(char)
+
+
+def test_original_palette_sizes_centered_headers_and_small_visio_text():
+ from app.qualigram_model import NODE_PRESETS,Node
+ q=Qualigram.model_validate(diagram());q.lanes[0].name='Врач'
+ q.nodes=[];q.edges=[]
+ for i,(kind,size) in enumerate(NODE_PRESETS.items()):
+  q.nodes.append(Node(id='p'+str(i),kind=kind,text={'and':'И','or':'ИЛИ'}.get(kind,'Отдел'),x=40+i*210,y=200,**size))
+ assert not layout_errors(q)
+ assert NODE_PRESETS['and']['width']==NODE_PRESETS['and']['height']<30
+ assert NODE_PRESETS['or']['height']<25
+ assert NODE_PRESETS['department']['width']==150
+ root=ET.fromstring(svg(q));ns={'s':'http://www.w3.org/2000/svg'}
+ header=next(n for n in root.findall('s:text',ns) if n.text=='Врач')
+ assert abs(float(header.get('y'))-116.12)<.01
+ and_group=next(n for n in root.findall('s:g',ns) if n.get('data-node-id')=='p0')
+ assert and_group.find('s:ellipse',ns) is not None
+ # The tiny symbols must fit their text in VDX as well as in the SVG/PNG.
+ vroot=ET.fromstring(vdx(q));v={'v':NS}
+ for name in ['Node_p0','Node_p1']:
+  group=next(n for n in vroot.findall('.//v:Shape',v) if n.get('NameU')==name)
+  h=float(group.find('v:XForm/v:Height',v).text)
+  font=float(group.find('v:Char/v:Size',v).text)
+  margins=sum(float(group.find('v:TextBlock/v:'+side,v).text) for side in ['TopMargin','BottomMargin'])
+  assert font*1.2+margins<h
+ assert png(q).startswith(b'\x89PNG')

@@ -21,6 +21,17 @@ def comparison_table(db, batch_id, filters, current_groups, field_name):
     return sorted(rows, key=lambda row: (-abs(row['delta']), row['label'].casefold()))
 
 
+def group_monthly(db, batch_id, filters):
+    """All observed group/month pairs, with the same filters and case folding."""
+    from app.incident_stats import conditions
+    month=func.strftime('%Y-%m', IncidentRecord.occurred_on)
+    rows=db.execute(select(func.min(IncidentRecord.group_name),month,func.count())
+        .where(*conditions(batch_id,filters))
+        .group_by(func.qms_casefold(IncidentRecord.group_name),month)
+        .order_by(month,func.qms_casefold(IncidentRecord.group_name))).all()
+    return [{'value':group,'month':period,'count':count} for group,period,count in rows]
+
+
 def advanced_statistics(db, batch_id, filters, distributions, months, total, where):
     from app.incident_stats import percent
     quarters = defaultdict(int)

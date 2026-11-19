@@ -25,7 +25,7 @@ with sync_playwright() as p:
         raw=path.read_bytes();assert raw[:8]==b'\x89PNG\r\n\x1a\n' and len(raw)>2000
         width,height=struct.unpack('>II',raw[16:24]);assert width>500 and height>150
         assert width*height<=16_100_000
-    for chart in ['departments','months','heat-month','heat-group','statuses','periods','quality','pareto']:
+    for chart in ['departments','months','heat-month','heat-group','heat-group-month','quarters','group-periods','statuses','periods','quality','pareto']:
         page.locator('#visual-type').select_option(chart)
         expect(page.locator('#visual-canvas svg')).to_be_visible()
         assert page.locator('#visual-table tbody tr').count()>0
@@ -63,4 +63,4 @@ with sync_playwright() as p:
     assert not errors,errors
     assert not external,external
     browser.close()
-print('Charts UI passed: 8 types, count/percent, PNG signatures and sizes, drilldown, dark theme, empty, mobile, snapshot chart; no JS errors or external requests')
+print('Charts UI passed: 11 types, count/percent, PNG signatures and sizes, drilldown, dark theme, empty, mobile, snapshot chart; no JS errors or external requests')

@@ -18,12 +18,12 @@ def wrap(text,width,font):
 
 
 def node_lines(node):
- pad=24
+ pad=8 if node.kind in ('and','or') else 24
  return wrap(node.text.strip(),max(12,node.width-pad),node.font_size)
 
 
 def needed_height(node):
- return max(32,len(node_lines(node))*node.font_size*1.22+24)
+ return max(16 if node.kind in ('and','or') else 32,len(node_lines(node))*node.font_size*1.22+(4 if node.kind in ('and','or') else 24))
 
 
 def layout_errors(graph):
@@ -76,7 +76,8 @@ def svg(graph:Qualigram,title='',selected=None):
   font=18
   while font>8 and len(wrap(lane.name,lane_width-16,font))*font*1.1>52:font-=1
   labels=wrap(lane.name,lane_width-16,font)
-  for j,line in enumerate(labels):text(line,x+lane_width/2,92+j*font*1.1,font,'middle',bold=True)
+  first=110-(len(labels)-1)*font*1.1/2+font*.34
+  for j,line in enumerate(labels):text(line,x+lane_width/2,first+j*font*1.1,font,'middle',bold=True)
  for edge in graph.edges:
   a,b,_,_=endpoints(graph,edge);red=edge.kind!='information';color='#D22222' if red else '#111111'
   out.append(f'<g data-edge-id="{edge.id}">')
@@ -98,15 +99,15 @@ def svg(graph:Qualigram,title='',selected=None):
   out.append(f'<g data-node-id="{node.id}" transform="translate({node.x} {node.y})" tabindex="0" role="button" aria-label="{escape(node.text,quote=True)}">')
   out.append(f'<title>{escape(node.text)}</title>')
   stroke='#E88900' if node.kind in ('note','document') else '#111111'
-  if node.kind in ('start','end','number'):
+  if node.kind in ('start','end','number','and'):
    out.append(f'<ellipse cx="{w/2}" cy="{h/2}" rx="{w/2}" ry="{h/2}" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
   elif node.kind=='document':
    out.append(f'<path d="M0,0 L{w-18},0 L{w},18 L{w},{h} L0,{h} Z M{w-18},0 L{w-18},18 L{w},18" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
   else:
-   radius=18 if node.kind in ('department','dept_in','dept_out','and','or','date','note') else 0
+   radius=h/2 if node.kind in ('department','dept_in','dept_out','or') else 18 if node.kind in ('date','note') else 0
    out.append(f'<rect width="{w}" height="{h}" rx="{radius}" fill="{fill}" stroke="{stroke}" stroke-width="2"'+(' stroke-dasharray="7 4"' if node.kind=='note' else '')+'/>')
   lines=node_lines(node);line_height=node.font_size*1.22
-  first=max(node.font_size+8,(h-len(lines)*line_height)/2+node.font_size)
+  first=h/2-(len(lines)-1)*line_height/2+node.font_size*.34
   for i,line in enumerate(lines):
    left=node.kind in ('action','note','document')
    if node.kind=='action' and line.strip():
