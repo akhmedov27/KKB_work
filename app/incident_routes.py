@@ -22,6 +22,7 @@ from app.department_aliases import selected_departments, suggestions
 from app.incident_report import ReportPeriod, MONTHS, prepare_report, document_report
 from app.incident_charts import chart_data, snapshot_chart
 from app.incident_comparison import compare, export_comparison, ComparisonProblem, KINDS
+from app.incident_filter_options import subgroup_options, reset_unrelated_subgroup
 
 
 def make_router(sessions, settings, render, logger):
@@ -51,6 +52,7 @@ def make_router(sessions, settings, render, logger):
             raise HTTPException(400, 'Этот импорт ещё не подтверждён. Откройте его проверку.')
         if filters.batch_id and batch is None:
             raise HTTPException(404)
+        if batch is not None:reset_unrelated_subgroup(db,batch.id,filters)
         return batch
 
     @router.get('/modules/incidents')
@@ -58,7 +60,9 @@ def make_router(sessions, settings, render, logger):
         filters = filters_for(request)
         with sessions() as db:
             batches = db.scalars(select(IncidentBatch).order_by(IncidentBatch.id.desc()).limit(20)).all()
+            original_subgroup=filters.subgroup
             batch = selected_batch(db, filters)
+            subgroup_reset=original_subgroup!=filters.subgroup
             if batch is None:
                 return page(request, 'incidents.html', batch=None, batches=batches)
             filters.batch_id = batch.id
@@ -67,14 +71,15 @@ def make_router(sessions, settings, render, logger):
             rows = register_rows(db, batch.id, filters)
             charts = chart_data(db, batch.id, filters, stats)
             options = {}
-            for key in ('department', 'group_name', 'subgroup', 'event_name', 'importance', 'status', 'root_cause'):
+            for key in ('department', 'group_name', 'importance', 'status'):
                 field = getattr(IncidentRecord, key)
                 options[key] = db.scalars(select(field).where(IncidentRecord.batch_id == batch.id).distinct().order_by(field).limit(500)).all()
+            subgroups=subgroup_options(db,batch.id,filters.group_name,filters.subgroup)
         args = {key: value for key, value in filters.model_dump(mode='json').items() if value is not None and value != '' and value != []}
         def url(page_number):
             return '/modules/incidents?' + urlencode({**args, 'page': page_number}, doseq=True)
         return page(request, 'incidents.html', batch=batch, batches=batches, upload=upload, summary=json.loads(batch.summary_json),
-                    stats=stats, rows=rows, filters=filters, options=options, charts=charts,
+                    stats=stats, rows=rows, filters=filters, options=options, charts=charts, subgroups=subgroups, subgroup_reset=subgroup_reset,
                     report_url='/incidents/report?' + urlencode(args, doseq=True),
                     export_url='/incidents/export.xlsx?' + urlencode(args, doseq=True),
                     previous_url=url(filters.page-1) if filters.page > 1 else None,
@@ -168,6 +173,13 @@ def make_router(sessions, settings, render, logger):
                 raise HTTPException(404)
             actual = db.scalars(select(IncidentRecord.department).where(IncidentRecord.batch_id == batch_id).distinct()).all()
         return {'items': suggestions(actual, q)}
+
+    @router.get('/incidents/subgroups')
+    def subgroup_choices(batch_id:int=Query(...,ge=1),group_name:str=Query('',max_length=500),selected:str=Query('',max_length=500)):
+        with sessions() as db:
+            batch=db.get(IncidentBatch,batch_id)
+            if batch is None or batch.state!='confirmed':raise HTTPException(404,'Подтверждённый набор не найден.')
+            return subgroup_options(db,batch_id,group_name,selected)
 
     @router.post('/incidents/uploads')
     async def upload(request: Request, file: UploadFile = File(...)):
