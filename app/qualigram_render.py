@@ -5,7 +5,7 @@ from math import hypot
 import fitz
 from app.qualigram_model import Qualigram
 
-FILLS={'action':'#E7E7E7','start':'#D6F5D6','end':'#F5C9F0','dept_in':'#D8F2DE',
+FILLS={'action':'#E7E7E7','start':'#CCFFCC','end':'#FFCCFF','dept_in':'#D8F2DE',
        'dept_out':'#F8CDD2','department':'#E7E7E7','and':'#FFFFFF','or':'#FFFFFF','and_or':'#FFFFFF',
        'note':'#FFF4D6','document':'#FFF0B0','date':'#ED8500','number':'#FFFFFF'}
 
@@ -18,20 +18,39 @@ def wrap(text,width,font):
 
 
 def node_lines(node):
- pad=8 if node.kind in ('and','or','and_or') else 24
+ pad=8 if node.kind in ('and','or','and_or') else 12 if node.kind in ('start','end') else 24
  return wrap(node.text.strip(),max(12,node.width-pad),node.font_size)
 
 
 def needed_height(node):
+ if node.kind in ('start','end'):return len(node_lines(node))*node.font_size*1.22+34
  return max(16 if node.kind in ('and','or','and_or') else 32,len(node_lines(node))*node.font_size*1.22+(4 if node.kind in ('and','or','and_or') else 24))
 
 
 def layout_errors(graph):
- return [f'Блок «{node.text[:45]}»: увеличьте высоту минимум до {needed_height(node):.0f} или уменьшите шрифт.'
+ errors=[f'Блок «{node.text[:45]}»: увеличьте высоту минимум до {needed_height(node):.0f} или уменьшите шрифт.'
          for node in graph.nodes if needed_height(node)>node.height+.01]
+ errors.extend(f'Блок «{node.text[:45]}»: увеличьте ширину минимум до 28.' for node in graph.nodes if node.kind in ('start','end') and node.width<28)
+ return errors
+
+
+def single_line_action(node):
+ return node.kind=='action' and len(node_lines(node))==1
+
+
+def terminal_geometry(node):
+ """Node bounds include the external caption; connections use the circle."""
+ label_height=len(node_lines(node))*node.font_size*1.22+8
+ diameter=max(4,min(node.width-12,node.height-label_height-10))
+ radius=diameter/2;cx=node.width/2
+ cy=label_height+5+radius if node.kind=='start' else 5+radius
+ return {'cx':cx,'cy':cy,'r':radius,'label_y':0 if node.kind=='start' else diameter+10,'label_h':label_height}
 
 
 def anchor(node,side):
+ if node.kind in ('start','end'):
+  t=terminal_geometry(node);cx=node.x+t['cx'];cy=node.y+t['cy'];r=t['r']
+  return {'top':(cx,cy-r),'right':(cx+r,cy),'bottom':(cx,cy+r),'left':(cx-r,cy)}[side]
  return {'top':(node.x+node.width/2,node.y),'right':(node.x+node.width,node.y+node.height/2),
          'bottom':(node.x+node.width/2,node.y+node.height),'left':(node.x,node.y+node.height/2)}[side]
 
@@ -72,12 +91,14 @@ def svg(graph:Qualigram,title='',selected=None):
  for i,lane in enumerate(graph.lanes):
   x=20+i*lane_width
   out.append(f'<rect x="{x}" y="80" width="{lane_width}" height="{graph.height-100}" fill="none" stroke="#999999" stroke-width="1"/>')
+  out.append(f'<g data-lane-id="{lane.id}" tabindex="0" role="button" aria-label="Должность: {escape(lane.name,quote=True)}">')
   out.append(f'<rect x="{x}" y="80" width="{lane_width}" height="60" fill="#F4F4F4" stroke="#777777"/>')
   font=18
   while font>8 and len(wrap(lane.name,lane_width-16,font))*font*1.1>52:font-=1
   labels=wrap(lane.name,lane_width-16,font)
   first=110-(len(labels)-1)*font*1.1/2+font*.34
   for j,line in enumerate(labels):text(line,x+lane_width/2,first+j*font*1.1,font,'middle',bold=True)
+  out.append('</g>')
  for edge in graph.edges:
   a,b,_,_=endpoints(graph,edge);red=edge.kind!='information';color='#D22222' if red else '#111111'
   out.append(f'<g data-edge-id="{edge.id}">')
@@ -99,7 +120,12 @@ def svg(graph:Qualigram,title='',selected=None):
   out.append(f'<g data-node-id="{node.id}" transform="translate({node.x} {node.y})" tabindex="0" role="button" aria-label="{escape(node.text,quote=True)}">')
   out.append(f'<title>{escape(node.text)}</title>')
   stroke='#E88900' if node.kind in ('note','document') else '#111111'
-  if node.kind in ('start','end','number','and'):
+  terminal=node.kind in ('start','end')
+  if terminal:
+   t=terminal_geometry(node);cx,cy,r=t['cx'],t['cy'],t['r'];tail_y=cy+(r if node.kind=='start' else -r)
+   out.append(f'<circle data-terminal-circle="true" cx="{cx}" cy="{cy}" r="{r}" fill="{fill}" stroke="black" stroke-width="4"/>')
+   out.append(f'<line data-terminal-tail="true" x1="{cx}" y1="{tail_y}" x2="{cx+r}" y2="{tail_y}" stroke="black" stroke-width="4" stroke-linecap="round"/>')
+  elif node.kind in ('number','and'):
    out.append(f'<ellipse cx="{w/2}" cy="{h/2}" rx="{w/2}" ry="{h/2}" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
   elif node.kind=='document':
    out.append(f'<path d="M0,0 L{w-18},0 L{w},18 L{w},{h} L0,{h} Z M{w-18},0 L{w-18},18 L{w},18" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
@@ -107,12 +133,13 @@ def svg(graph:Qualigram,title='',selected=None):
    radius=h/2 if node.kind in ('department','dept_in','dept_out','or','and_or') else 18 if node.kind in ('date','note') else 0
    out.append(f'<rect width="{w}" height="{h}" rx="{radius}" fill="{fill}" stroke="{stroke}" stroke-width="2"'+(' stroke-dasharray="7 4"' if node.kind=='note' else '')+'/>')
   lines=node_lines(node);line_height=node.font_size*1.22
-  first=h/2-(len(lines)-1)*line_height/2+node.font_size*.34
+  first=(t['label_y']+t['label_h']/2 if terminal else h/2)-(len(lines)-1)*line_height/2+node.font_size*.34
   for i,line in enumerate(lines):
-   left=node.kind in ('action','note','document')
-   if node.kind=='action' and line.strip():
+   left=(node.kind=='action' and not single_line_action(node)) or node.kind in ('note','document')
+   if node.kind=='action' and not single_line_action(node) and line.strip():
     text('•',7,first+i*line_height,node.font_size,fill='#0000CC')
-   text(line,18 if left else w/2,first+i*line_height,node.font_size,'start' if left else 'middle','#FFFFFF' if node.kind=='date' else '#111111')
+   color=('#008A30' if node.kind=='start' else '#A73525') if terminal else '#FFFFFF' if node.kind=='date' else '#111111'
+   text(line,18 if left else w/2,first+i*line_height,node.font_size,'start' if left else 'middle',color,bold=terminal)
   for x,label in role_badges(graph,node):
    out.append(f'<rect x="{x-28}" y="-13" width="56" height="24" rx="12" fill="white" stroke="black" stroke-width="2"/>');text(label,x,5,16,'middle')
   if node.number is not None:

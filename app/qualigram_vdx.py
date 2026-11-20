@@ -1,7 +1,7 @@
 """Editable Visio 2003 XML (.vdx), compatible with the Visio 2007 format family."""
 from math import hypot, atan2
 import xml.etree.ElementTree as ET
-from app.qualigram_render import FILLS, endpoints, role_badges
+from app.qualigram_render import FILLS, endpoints, role_badges, anchor, terminal_geometry, single_line_action, node_lines
 
 NS='http://schemas.microsoft.com/visio/2003/core'
 ET.register_namespace('',NS)
@@ -26,9 +26,9 @@ def vdx(graph,title=''):
  def xform(shape,cx,cy,w,h,angle=0):
   x=child(shape,'XForm')
   for key,value in [('PinX',cx),('PinY',cy),('Width',w),('Height',h),('LocPinX',w/2),('LocPinY',h/2),('Angle',angle),('FlipX',0),('FlipY',0),('ResizeMode',0)]:child(x,key,value)
- def appearance(shape,fill='#FFFFFF',line='#111111',pattern=1,rounding=0,arrow=0):
+ def appearance(shape,fill='#FFFFFF',line='#111111',pattern=1,rounding=0,arrow=0,weight=.009):
   l=child(shape,'Line')
-  for key,value in [('LineWeight',.009),('LineColor',line),('LinePattern',pattern),('Rounding',rounding),
+  for key,value in [('LineWeight',weight),('LineColor',line),('LinePattern',pattern),('Rounding',rounding),
                     ('EndArrowSize',2),('BeginArrow',0),('EndArrow',arrow),('LineCap',0),('BeginArrowSize',2),('LineColorTrans',0)]:child(l,key,value)
   f=child(shape,'Fill')
   for key,value in [('FillForegnd','#FFFFFF' if fill=='none' else fill),('FillBkgnd','#FFFFFF'),('FillPattern',0 if fill=='none' else 1),
@@ -76,13 +76,29 @@ def vdx(graph,title=''):
   w,h=node.width*scale,node.height*scale
   group=child(shapes,'Shape',ID=ident(),Type='Group',NameU='Node_'+node.id)
   node_ids[node.id]=group.get('ID');xform(group,(node.x+node.width/2)*scale,page_height-(node.y+node.height/2)*scale,w,h)
-  for i,(x,y,fx,fy) in enumerate([(w/2,h,'Width*0.5','Height'),(w,h/2,'Width','Height*0.5'),(w/2,0,'Width*0.5','0'),(0,h/2,'0','Height*0.5')]):
-   c=child(group,'Connection',ID=i);child(c,'X',x,F=fx);child(c,'Y',y,F=fy);child(c,'DirX',0);child(c,'DirY',0);child(c,'Type',0)
-  text(group,node.text,node.font_size*scale,color='#FFFFFF' if node.kind=='date' else '#111111',align=0 if node.kind in ('action','note','document') else 1,compact=node.kind in ('and','or','and_or'))
+  for i,side in enumerate(['top','right','bottom','left']):
+   ax,ay=anchor(node,side);fx=(ax-node.x)/node.width;fy=1-(ay-node.y)/node.height
+   c=child(group,'Connection',ID=i);child(c,'X',fx*w,F=f'Width*{fx:.9f}');child(c,'Y',fy*h,F=f'Height*{fy:.9f}');child(c,'DirX',0);child(c,'DirY',0);child(c,'Type',0)
+  terminal=node.kind in ('start','end')
+  if not terminal:text(group,'\n'.join(node_lines(node)) if node.kind=='action' else node.text,node.font_size*scale,color='#FFFFFF' if node.kind=='date' else '#111111',align=0 if (node.kind=='action' and not single_line_action(node)) or node.kind in ('note','document') else 1,compact=node.kind in ('and','or','and_or'))
   members=child(group,'Shapes')
-  body=child(members,'Shape',ID=ident(),Type='Shape');xform(body,w/2,h/2,w,h)
-  appearance(body,FILLS[node.kind],'#E88900' if node.kind in ('note','document') else '#111111',pattern=2 if node.kind=='note' else 1,rounding=min(w,h)/2 if node.kind in ('dept_in','dept_out','department','or','and_or') else .12 if node.kind in ('note','date') else 0)
-  geometry(body,w,h,'ellipse' if node.kind in ('start','end','number','and') else 'document' if node.kind=='document' else 'rect')
+  body=child(members,'Shape',ID=ident(),Type='Shape')
+  if terminal:
+   t=terminal_geometry(node);r=t['r']*scale;cx=t['cx']*scale;cy=h-t['cy']*scale
+   xform(body,cx,cy,2*r,2*r);appearance(body,FILLS[node.kind],weight=4*scale);geometry(body,2*r,2*r,'ellipse')
+   tail_y=cy-r if node.kind=='start' else cy+r
+   tail=child(members,'Shape',ID=ident(),Type='Shape');xform(tail,cx+r/2,tail_y,r,0);appearance(tail,'none',weight=4*scale)
+   geom=child(tail,'Geom',IX=0)
+   for key,value in [('NoFill',1),('NoLine',0),('NoShow',0),('NoSnap',0)]:child(geom,key,value)
+   start=child(geom,'MoveTo',IX=1);child(start,'X',0);child(start,'Y',0)
+   end=child(geom,'LineTo',IX=2);child(end,'X',r);child(end,'Y',0)
+   label=child(members,'Shape',ID=ident(),Type='Shape');xform(label,w/2,h-(t['label_y']+t['label_h']/2)*scale,w,t['label_h']*scale)
+   appearance(label,'none',pattern=0);geometry(label,w,t['label_h']*scale)
+   text(label,'\n'.join(node_lines(node)),node.font_size*scale,color='#008A30' if node.kind=='start' else '#A73525',bold=True,compact=True)
+  else:
+   xform(body,w/2,h/2,w,h)
+   appearance(body,FILLS[node.kind],'#E88900' if node.kind in ('note','document') else '#111111',pattern=2 if node.kind=='note' else 1,rounding=min(w,h)/2 if node.kind in ('dept_in','dept_out','department','or','and_or') else .12 if node.kind in ('note','date') else 0)
+   geometry(body,w,h,'ellipse' if node.kind in ('number','and') else 'document' if node.kind=='document' else 'rect')
   for x,label in role_badges(graph,node):
    badge=child(members,'Shape',ID=ident(),Type='Shape');xform(badge,x*scale,h+scale,56*scale,24*scale)
    appearance(badge,rounding=.08);geometry(badge,56*scale,24*scale);text(badge,label,16*scale)
@@ -99,10 +115,9 @@ def vdx(graph,title=''):
   xform(shape,(ax+bx)/2,(ay+by)/2,length,0,angle)
   one=child(shape,'XForm1D')
   for prefix,nid,side,x,y in [('Begin',node_ids[edge.source],first,ax,ay),('End',node_ids[edge.target],last,bx,by)]:
-   offsets={'top':('','+Sheet.'+nid+'!Height*0.5'),'bottom':('','-Sheet.'+nid+'!Height*0.5'),
-            'left':('-Sheet.'+nid+'!Width*0.5',''),'right':('+Sheet.'+nid+'!Width*0.5','')}
-   ox,oy=offsets[side]
-   child(one,prefix+'X',x,F=f'Sheet.{nid}!PinX{ox}');child(one,prefix+'Y',y,F=f'Sheet.{nid}!PinY{oy}')
+   node=next(n for n in graph.nodes if node_ids[n.id]==nid);px,py=anchor(node,side)
+   ox=(px-node.x)/node.width-.5;oy=.5-(py-node.y)/node.height
+   child(one,prefix+'X',x,F=f'Sheet.{nid}!PinX+Sheet.{nid}!Width*({ox:.9f})');child(one,prefix+'Y',y,F=f'Sheet.{nid}!PinY+Sheet.{nid}!Height*({oy:.9f})')
    child(connects,'Connect',FromSheet=shape.get('ID'),FromCell=prefix+'X',FromPart=9 if prefix=='Begin' else 12,
          ToSheet=nid,ToCell=f'Connections.X{port_index[side]+1}',ToPart=100+port_index[side])
   appearance(shape,'none','#111111' if edge.kind=='information' else '#D22222',pattern=2 if edge.kind=='defect' else 1,arrow=4)

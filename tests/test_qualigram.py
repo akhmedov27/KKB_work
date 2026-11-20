@@ -125,7 +125,7 @@ def test_original_palette_sizes_centered_headers_and_small_visio_text():
  assert NODE_PRESETS['or']['height']<25
  assert NODE_PRESETS['department']['width']==150
  root=ET.fromstring(svg(q));ns={'s':'http://www.w3.org/2000/svg'}
- header=next(n for n in root.findall('s:text',ns) if n.text=='Врач')
+ header=next(n for n in root.findall('.//s:g[@data-lane-id]/s:text',ns) if n.text=='Врач')
  assert abs(float(header.get('y'))-116.12)<.01
  and_group=next(n for n in root.findall('s:g',ns) if n.get('data-node-id')=='p0')
  assert and_group.find('s:ellipse',ns) is not None
@@ -155,3 +155,65 @@ def test_hybrid_kind_roundtrip_export_and_parent_deletion(client):
  assert c.post(f'/stu/{id}/delete',data={'version':3},follow_redirects=False).status_code==303
  assert c.get(base).status_code==404 and c.get(base+'/export.vdx').status_code==404
  assert c.put(base,json={'version':3,'diagram':q.model_dump(mode='json')}).status_code==404
+
+
+def terminal_diagram():
+ q=diagram()
+ q['nodes'][0].update(kind='start',text='Начало процесса',width=180,height=150)
+ q['nodes'][1].update(x=300,y=400,width=420,height=160,text='Одно действие',lanes=['a'],responsible='a',number=None)
+ q['nodes'][2].update(kind='end',text='Окончание процесса',y=700,width=180,height=150)
+ return Qualigram.model_validate(q)
+
+
+def test_terminal_circles_captions_and_connection_ports():
+ from app.qualigram_render import anchor,terminal_geometry
+ q=terminal_diagram();root=ET.fromstring(svg(q));s={'s':'http://www.w3.org/2000/svg'}
+ assert not layout_errors(q)
+ for node in [q.nodes[0],q.nodes[2]]:
+  group=root.find(f's:g[@data-node-id="{node.id}"]',s);circle=group.find('s:circle',s);tail=group.find('s:line',s);label=group.find('s:text',s)
+  cx,cy,r=map(float,[circle.get('cx'),circle.get('cy'),circle.get('r')]);assert r>30
+  assert circle.get('fill')==('#CCFFCC' if node.kind=='start' else '#FFCCFF')
+  assert tail.get('stroke-width')=='4' and float(tail.get('x1'))==cx and float(tail.get('x2'))==cx+r
+  assert float(tail.get('y1'))==pytest.approx(cy+(r if node.kind=='start' else -r))
+  assert (float(label.get('y'))<cy-r) if node.kind=='start' else (float(label.get('y'))>cy+r)
+  assert anchor(node,'bottom')==pytest.approx((node.x+cx,node.y+cy+r))
+  assert anchor(node,'top')[1]!=node.y  # Caption is not a connection target.
+ assert png(q).startswith(b'\x89PNG')
+
+
+def test_single_rendered_action_line_centered_and_wrap_reverts_to_left():
+ q=terminal_diagram();n=q.nodes[1];s={'s':'http://www.w3.org/2000/svg'}
+ def labels():return ET.fromstring(svg(q)).find('s:g[@data-node-id="n"]',s).findall('s:text',s)
+ assert len(labels())==1 and labels()[0].get('text-anchor')=='middle'
+ assert float(labels()[0].get('y'))==pytest.approx(n.height/2+n.font_size*.34,abs=.01)
+ n.text='Первая строка\nВторая строка'
+ assert '•' in [t.text for t in labels()] and all(t.get('text-anchor')=='start' for t in labels())
+ n.text='Очень длинная строка описания действия, которая переносится по ширине';n.width=180
+ assert '•' in [t.text for t in labels()]
+ n.width=1100
+ assert len(labels())==1 and labels()[0].get('text-anchor')=='middle'
+
+
+def test_native_terminal_parts_glue_and_schema_contract():
+ from app.qualigram_render import anchor
+ from lxml import etree
+ from pathlib import Path
+ q=terminal_diagram();root=ET.fromstring(vdx(q));v={'v':NS};scale=8.267716535/q.width
+ for node in [q.nodes[0],q.nodes[2]]:
+  group=root.find(f'.//v:Shape[@NameU="Node_{node.id}"]',v);assert group.find('v:Text',v) is None
+  body,tail,label=group.find('v:Shapes',v)
+  assert float(body.find('v:XForm/v:Width',v).text)==float(body.find('v:XForm/v:Height',v).text)
+  assert body.find('v:Geom/v:Ellipse',v) is not None and tail.find('v:Geom/v:LineTo',v) is not None
+  assert label.find('v:Text',v).text==node.text
+  for index,side in enumerate(['top','right','bottom','left']):
+   port=group.find(f'v:Connection[@ID="{index}"]',v);x,y=anchor(node,side)
+   assert float(port.find('v:X',v).text)==pytest.approx((x-node.x)*scale)
+   assert float(port.find('v:Y',v).text)==pytest.approx((node.y+node.height-y)*scale)
+ assert root.find('.//v:Shape[@NameU="Node_n"]/v:Para/v:HorzAlign',v).text=='1'
+ edge=root.find('.//v:Shape[@NameU="Edge_e1"]/v:XForm1D',v)
+ assert float(edge.find('v:BeginY',v).text)==pytest.approx(11.692913386-anchor(q.nodes[0],'bottom')[1]*scale)
+ schema=etree.XMLSchema(etree.parse(str(Path(__file__).parent/'fixtures/visio2003_sections.xsd')))
+ native=etree.fromstring(vdx(q))
+ for tag in ['Char','Para','TextBlock','Line','Fill','XForm']:
+  for element in native.findall('.//v:'+tag,v):schema.assertValid(element)
+ assert len(ET.fromstring(svg(q)).findall('s:g[@data-lane-id]',{'s':'http://www.w3.org/2000/svg'}))==len(q.lanes)

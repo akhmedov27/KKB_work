@@ -16,6 +16,7 @@ NODE_PRESETS={
  'or':{'width':46,'height':20,'font_size':12},
  'and_or':{'width':64,'height':24,'font_size':12},
  **{kind:{'width':150,'height':47,'font_size':16} for kind in ('department','dept_in','dept_out')},
+ **{kind:{'width':180,'height':150,'font_size':16} for kind in ('start','end')},
 }
 
 class Model(BaseModel):

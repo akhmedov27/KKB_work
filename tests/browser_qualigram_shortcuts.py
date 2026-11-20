@@ -14,7 +14,7 @@ with sync_playwright() as p:
  expect(nodes).to_have_count(3);expect(page.locator('#q-undo')).to_be_disabled()
  def node(nid):return page.locator(f'#q-paper [data-node-id="{nid}"]')
  def edge(eid):return page.locator(f'#q-paper [data-edge-id="{eid}"]')
- node('n').click(position={'x':100,'y':50});expect(node('n')).to_have_class('q-selected');expect(node('n').locator('[data-q-selection]')).to_have_count(1)
+ node('n').click(position={'x':100,'y':50});expect(node('n')).to_have_class('q-selected');expect(node('n').locator('[data-q-selection]')).to_have_count(9)
  page.keyboard.press('ArrowRight');expect(page.get_by_label('X',exact=True)).to_have_value('41')
  page.keyboard.press('Shift+ArrowDown');expect(page.get_by_label('Y',exact=True)).to_have_value('330')
  page.keyboard.press('ArrowRight');expect(page.get_by_label('X',exact=True)).to_have_value('42')
