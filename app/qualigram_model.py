@@ -6,7 +6,7 @@ ID=Annotated[str,StringConstraints(pattern=r'^[A-Za-z0-9_-]{1,64}$')]
 Label=Annotated[str,StringConstraints(max_length=500)]
 KINDS={'action':'Действие','start':'Начало процесса','end':'Окончание процесса',
        'dept_in':'Отдел — вход','dept_out':'Отдел — выход','department':'Отдел — внешний',
-       'and':'И','or':'ИЛИ','note':'Пояснение','document':'Документ','date':'Дата','number':'Номер'}
+       'and':'И','or':'ИЛИ','and_or':'И/ИЛИ','note':'Пояснение','document':'Документ','date':'Дата','number':'Номер'}
 EDGE_KINDS={'information':'Информация','defect':'Брак','risk':'Высокий риск'}
 
 # Original Visio palette: И 0.397 cm circle, ИЛИ 0.796 x 0.318 cm,
@@ -14,6 +14,7 @@ EDGE_KINDS={'information':'Информация','defect':'Брак','risk':'В�
 NODE_PRESETS={
  'and':{'width':24,'height':24,'font_size':16},
  'or':{'width':46,'height':20,'font_size':12},
+ 'and_or':{'width':64,'height':24,'font_size':12},
  **{kind:{'width':150,'height':47,'font_size':16} for kind in ('department','dept_in','dept_out')},
 }
 
@@ -26,7 +27,7 @@ class Lane(Model):
 
 class Node(Model):
  id:ID
- kind:Literal['action','start','end','dept_in','dept_out','department','and','or','note','document','date','number']='action'
+ kind:Literal['action','start','end','dept_in','dept_out','department','and','or','and_or','note','document','date','number']='action'
  text:Annotated[str,StringConstraints(max_length=2000)]=''
  x:float=Field(default=40,ge=20,le=1657)
  y:float=Field(default=160,ge=140,le=1657)

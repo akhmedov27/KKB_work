@@ -119,7 +119,7 @@ def test_original_palette_sizes_centered_headers_and_small_visio_text():
  q=Qualigram.model_validate(diagram());q.lanes[0].name='Врач'
  q.nodes=[];q.edges=[]
  for i,(kind,size) in enumerate(NODE_PRESETS.items()):
-  q.nodes.append(Node(id='p'+str(i),kind=kind,text={'and':'И','or':'ИЛИ'}.get(kind,'Отдел'),x=40+i*210,y=200,**size))
+  q.nodes.append(Node(id='p'+str(i),kind=kind,text={'and':'И','or':'ИЛИ','and_or':'И/ИЛИ'}.get(kind,'Отдел'),x=40+(i%5)*210,y=200+(i//5)*100,**size))
  assert not layout_errors(q)
  assert NODE_PRESETS['and']['width']==NODE_PRESETS['and']['height']<30
  assert NODE_PRESETS['or']['height']<25
@@ -138,3 +138,20 @@ def test_original_palette_sizes_centered_headers_and_small_visio_text():
   margins=sum(float(group.find('v:TextBlock/v:'+side,v).text) for side in ['TopMargin','BottomMargin'])
   assert font*1.2+margins<h
  assert png(q).startswith(b'\x89PNG')
+
+
+def test_hybrid_kind_roundtrip_export_and_parent_deletion(client):
+ from app.qualigram_model import NODE_PRESETS,Node
+ c,_=client;id=create(c);content_data=StuContent.model_validate(content()).model_dump(mode='json');pid=content_data['process_ids'][0]
+ c.put(f'/stu/{id}',json={'version':1,'content':content_data});q=Qualigram.model_validate(diagram())
+ q.nodes.append(Node(id='hybrid',kind='and_or',text='И/ИЛИ',x=300,y=700,**NODE_PRESETS['and_or']))
+ assert not layout_errors(q)
+ base=f'/stu/{id}/qualigrams/{pid}'
+ assert c.put(base,json={'version':2,'diagram':q.model_dump(mode='json')}).status_code==200
+ assert 'И/ИЛИ' in c.post(base+'/preview',json=q.model_dump(mode='json')).json()['svg']
+ assert c.get(base+'/export.png').content.startswith(b'\x89PNG')
+ assert 'И/ИЛИ' in ''.join(ET.fromstring(c.get(base+'/export.vdx').content).itertext())
+ assert c.get(f'/stu/{id}/export.docx').status_code==200
+ assert c.post(f'/stu/{id}/delete',data={'version':3},follow_redirects=False).status_code==303
+ assert c.get(base).status_code==404 and c.get(base+'/export.vdx').status_code==404
+ assert c.put(base,json={'version':3,'diagram':q.model_dump(mode='json')}).status_code==404

@@ -128,3 +128,35 @@ def test_v5_upgrade_backup_preserves_existing_data(tmp_path):
   assert c.get('/modules/stu').status_code==200
  with closing(sqlite3.connect(path)) as db:assert db.execute('SELECT original_name FROM documents').fetchone()==('old.pdf',)
  assert list((tmp_path/'backups').glob('qms-before-v6-*.sqlite3'))
+
+
+def test_delete_confirmation_version_guard_and_draft_scope(client):
+ c,path=client;id=create(c);other=create(c);data=content();data['title']='<script>Удаление</script>'
+ c.put(f'/stu/{id}',json={'version':1,'content':data})
+ page=c.get(f'/stu/{id}/delete');assert page.status_code==200
+ assert '&lt;script&gt;' in page.text and '<script>Удаление</script>' not in page.text
+ assert 'Удалить СТУ окончательно' in page.text and 'Редакция: 1' in page.text
+ assert c.get(f'/stu/{id}').status_code==200 # GET is read-only.
+ assert c.post(f'/stu/{id}/delete',data={'version':1}).status_code==409
+ assert c.post(f'/stu/{id}/delete').status_code==422
+ assert c.get(f'/stu/{id}').status_code==200
+ r=c.post(f'/stu/{id}/delete',data={'version':2},follow_redirects=False)
+ assert r.status_code==303 and r.headers['location']=='/modules/stu'
+ assert c.get(f'/stu/{id}').status_code==404 and c.get(f'/stu/{id}/delete').status_code==404
+ assert c.post(f'/stu/{id}/delete',data={'version':2}).status_code==404
+ assert c.get(f'/stu/{other}').status_code==200
+ assert f'href="/stu/{id}"' not in c.get('/modules/stu').text
+ engine=build_engine(path/'qms.sqlite3')
+ with Session(engine) as db:
+  erased=db.get(StuDraft,id);assert erased.payload_json=='' and erased.title=='Удалённый СТУ'
+ engine.dispose()
+ with TestClient(create_app(Settings(data_dir=path,_env_file=None))) as restarted:assert restarted.get(f'/stu/{id}').status_code==404
+
+
+def test_deleted_last_draft_id_cannot_be_reused_or_overwritten(client):
+ c,_=client;id=create(c)
+ assert c.post(f'/stu/{id}/delete',data={'version':1},follow_redirects=False).status_code==303
+ new=create(c);assert new>id
+ assert c.put(f'/stu/{id}',json={'version':1,'content':content()}).status_code==404
+ assert c.post(f'/stu/{id}/copy',follow_redirects=False).status_code==404
+ assert c.get(f'/stu/{new}').status_code==200

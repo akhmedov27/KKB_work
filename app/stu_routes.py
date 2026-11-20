@@ -15,13 +15,13 @@ def make_router(sessions,render):
  router=APIRouter()
  def get(db,id):
   row=db.get(StuDraft,id)
-  if row is None:raise HTTPException(404,'Черновик СТУ не найден.')
+  if row is None or row.payload_json=='':raise HTTPException(404,'Черновик СТУ не найден.')
   return row
  @router.get('/modules/stu')
  def listing(request:Request,page:int=1):
   if not 1<=page<=1000000:raise HTTPException(400,'Некорректная страница.')
   with sessions() as db:
-   rows=db.scalars(select(StuDraft).order_by(StuDraft.updated_at.desc(),StuDraft.id.desc()).offset((page-1)*50).limit(51)).all()
+   rows=db.scalars(select(StuDraft).where(StuDraft.payload_json!='').order_by(StuDraft.updated_at.desc(),StuDraft.id.desc()).offset((page-1)*50).limit(51)).all()
   return render(request,'stu_list.html',active='stu',title='Конструктор СТУ',drafts=rows[:50],modes={row.id:json.loads(row.payload_json).get('mode','standard') for row in rows[:50]},page=page,has_more=len(rows)>50)
  @router.post('/stu')
  def create(mode:Literal['standard','free']=Form('standard'),base:Literal['empty','kkb']=Form('empty')):
@@ -52,6 +52,20 @@ def make_router(sessions,render):
   with sessions.begin() as db:
    old=get(db,id);row=StuDraft(title=old.title+' — копия',payload_json=old.payload_json);db.add(row);db.flush();new_id=row.id
   return RedirectResponse(f'/stu/{new_id}',303)
+ @router.get('/stu/{id}/delete')
+ def delete_confirmation(request:Request,id:int):
+  with sessions() as db:row=get(db,id)
+  content=StuContent.model_validate_json(row.payload_json)
+  return render(request,'stu_delete.html',active='stu',title='Удаление СТУ',draft=row,content=content)
+ @router.post('/stu/{id}/delete')
+ def delete_draft(id:int,version:int=Form(...,ge=1)):
+  with sessions.begin() as db:
+   get(db,id)
+   # Erase content but reserve its ID: SQLite must not reuse a deleted URL
+   # for another draft, which could then be overwritten by an old browser tab.
+   result=db.execute(update(StuDraft).where(StuDraft.id==id,StuDraft.version==version).values(title='Удалённый СТУ',payload_json='',version=version+1,updated_at=now()))
+   if result.rowcount!=1:raise HTTPException(409,'СТУ изменён в другой вкладке. Откройте страницу удаления заново и проверьте документ.')
+  return RedirectResponse('/modules/stu',303)
  @router.get('/stu/{id}/export.docx')
  async def export(id:int):
   with sessions() as db:row=get(db,id)

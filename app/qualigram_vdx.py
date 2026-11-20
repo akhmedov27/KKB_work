@@ -78,10 +78,10 @@ def vdx(graph,title=''):
   node_ids[node.id]=group.get('ID');xform(group,(node.x+node.width/2)*scale,page_height-(node.y+node.height/2)*scale,w,h)
   for i,(x,y,fx,fy) in enumerate([(w/2,h,'Width*0.5','Height'),(w,h/2,'Width','Height*0.5'),(w/2,0,'Width*0.5','0'),(0,h/2,'0','Height*0.5')]):
    c=child(group,'Connection',ID=i);child(c,'X',x,F=fx);child(c,'Y',y,F=fy);child(c,'DirX',0);child(c,'DirY',0);child(c,'Type',0)
-  text(group,node.text,node.font_size*scale,color='#FFFFFF' if node.kind=='date' else '#111111',align=0 if node.kind in ('action','note','document') else 1,compact=node.kind in ('and','or'))
+  text(group,node.text,node.font_size*scale,color='#FFFFFF' if node.kind=='date' else '#111111',align=0 if node.kind in ('action','note','document') else 1,compact=node.kind in ('and','or','and_or'))
   members=child(group,'Shapes')
   body=child(members,'Shape',ID=ident(),Type='Shape');xform(body,w/2,h/2,w,h)
-  appearance(body,FILLS[node.kind],'#E88900' if node.kind in ('note','document') else '#111111',pattern=2 if node.kind=='note' else 1,rounding=min(w,h)/2 if node.kind in ('dept_in','dept_out','department','or') else .12 if node.kind in ('note','date') else 0)
+  appearance(body,FILLS[node.kind],'#E88900' if node.kind in ('note','document') else '#111111',pattern=2 if node.kind=='note' else 1,rounding=min(w,h)/2 if node.kind in ('dept_in','dept_out','department','or','and_or') else .12 if node.kind in ('note','date') else 0)
   geometry(body,w,h,'ellipse' if node.kind in ('start','end','number','and') else 'document' if node.kind=='document' else 'rect')
   for x,label in role_badges(graph,node):
    badge=child(members,'Shape',ID=ident(),Type='Shape');xform(badge,x*scale,h+scale,56*scale,24*scale)

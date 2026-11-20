@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}
+<div class="eyebrow">КОНСТРУКТОР СТУ</div><h1>Удаление СТУ</h1>
+<section class="panel"><h2>{{ draft.title }}</h2><p>Номер: <strong>{{ content.number or 'Не задан' }}</strong> · Редакция: {{ content.edition }}</p>
+<p>Будет удалён этот черновик со всеми разделами и таблицами. Связанных квалиграмм: {{ content.qualigrams|length }}. Восстановление через интерфейс невозможно. Ранее скачанные файлы останутся у вас.</p>
+<form method="post" action="/stu/{{ draft.id }}/delete"><input type="hidden" name="version" value="{{ draft.version }}"><div class="stu-controls"><button type="submit">Удалить СТУ окончательно</button><a href="/stu/{{ draft.id }}">Отмена — вернуться к СТУ</a></div></form></section>
+{% endblock %}

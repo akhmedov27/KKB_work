@@ -6,7 +6,7 @@ import fitz
 from app.qualigram_model import Qualigram
 
 FILLS={'action':'#E7E7E7','start':'#D6F5D6','end':'#F5C9F0','dept_in':'#D8F2DE',
-       'dept_out':'#F8CDD2','department':'#E7E7E7','and':'#FFFFFF','or':'#FFFFFF',
+       'dept_out':'#F8CDD2','department':'#E7E7E7','and':'#FFFFFF','or':'#FFFFFF','and_or':'#FFFFFF',
        'note':'#FFF4D6','document':'#FFF0B0','date':'#ED8500','number':'#FFFFFF'}
 
 
@@ -18,12 +18,12 @@ def wrap(text,width,font):
 
 
 def node_lines(node):
- pad=8 if node.kind in ('and','or') else 24
+ pad=8 if node.kind in ('and','or','and_or') else 24
  return wrap(node.text.strip(),max(12,node.width-pad),node.font_size)
 
 
 def needed_height(node):
- return max(16 if node.kind in ('and','or') else 32,len(node_lines(node))*node.font_size*1.22+(4 if node.kind in ('and','or') else 24))
+ return max(16 if node.kind in ('and','or','and_or') else 32,len(node_lines(node))*node.font_size*1.22+(4 if node.kind in ('and','or','and_or') else 24))
 
 
 def layout_errors(graph):
@@ -104,7 +104,7 @@ def svg(graph:Qualigram,title='',selected=None):
   elif node.kind=='document':
    out.append(f'<path d="M0,0 L{w-18},0 L{w},18 L{w},{h} L0,{h} Z M{w-18},0 L{w-18},18 L{w},18" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
   else:
-   radius=h/2 if node.kind in ('department','dept_in','dept_out','or') else 18 if node.kind in ('date','note') else 0
+   radius=h/2 if node.kind in ('department','dept_in','dept_out','or','and_or') else 18 if node.kind in ('date','note') else 0
    out.append(f'<rect width="{w}" height="{h}" rx="{radius}" fill="{fill}" stroke="{stroke}" stroke-width="2"'+(' stroke-dasharray="7 4"' if node.kind=='note' else '')+'/>')
   lines=node_lines(node);line_height=node.font_size*1.22
   first=h/2-(len(lines)-1)*line_height/2+node.font_size*.34
